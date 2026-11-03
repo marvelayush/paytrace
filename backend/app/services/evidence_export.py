@@ -123,16 +123,23 @@ def evidence_pdf(claim: dict, items: list[dict], generated_on: date) -> bytes:
         pdf.cell(0, 6, rupees(sum(amounts)), border="B", align="R", new_x="LMARGIN", new_y="NEXT")
     pdf.ln(6)
 
-    # Item table
-    columns = [("Order", 34, "L"), ("Reason", 38, "L"), ("Expected", 27, "R"), ("Received", 27, "R"), ("Claimed", 27, "R"), ("Due", 21, "R"), ("Days", 8, "R")]
-    pdf.set_font("Helvetica", "B", 8.5)
-    pdf.set_text_color(*muted)
-    for label, width, align in columns:
-        pdf.cell(width, 6, label, border="B", align=align)
-    pdf.ln()
-    pdf.set_font("Helvetica", size=8.5)
-    pdf.set_text_color(*ink)
+    # Item table (widths add up to the 182 mm between A4 margins)
+    columns = [("Order", 32, "L"), ("Reason", 36, "L"), ("Expected", 26, "R"), ("Received", 26, "R"), ("Claimed", 26, "R"), ("Due", 22, "R"), ("Overdue", 14, "R")]
+
+    def table_header() -> None:
+        pdf.set_font("Helvetica", "B", 8.5)
+        pdf.set_text_color(*muted)
+        for label, width, align in columns:
+            pdf.cell(width, 6, label, border="B", align=align)
+        pdf.ln()
+        pdf.set_font("Helvetica", size=8.5)
+        pdf.set_text_color(*ink)
+
+    table_header()
     for item in items:
+        if pdf.will_page_break(5.5):
+            pdf.add_page()
+            table_header()  # repeat the column names on every page
         values = [
             item["order_id"], REASON_LABELS.get(item["reason_status"], item["reason_status"]), rupees(item["expected_paise"]),
             rupees(item["received_paise"]), rupees(item["amount_paise"]), _day(item["due_date"]),

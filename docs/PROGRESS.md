@@ -47,3 +47,12 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Drawer: expected / received / difference cards, a one-sentence explanation of what is wrong and who owes it, "Where every rupee went" (rate card side by side with what partners paid), a tax-not-leakage note, evidence lines, and order facts.
 - Tests: 7 API tests (filters, sorting, search, totals, breakdown, AWB-matched evidence, masked customer).
 - TanStack Table is pinned to v8.21.3, the current stable API (v9 rewrote it).
+
+## Milestone 7 — Claims
+- `refresh_claims` (set-based SQL) runs after every reconciliation (API, uploads, seed). Each flagged order joins its owing partner's single open claim with an evidence snapshot. Paid orders leave open claims, and amounts follow the latest run. Filed, recovered and rejected claims are frozen, and an order is claimed at most once (unique index).
+- Status flow open → filed (with optional partner reference) → recovered / rejected. Finance only, enforced server-side (409 on illegal transitions), audited.
+- Evidence export for both roles: formula-safe CSV with each order's figures and the source file + row of every line, and a PDF summary (headline amount, summary by reason, item table with repeating headers, page numbers, Indian digit grouping).
+- Screens: claims list with status tabs showing totals, one row per partner claim with reasons; claim detail with exports, finance-only status actions behind confirmation dialogs, item table that opens the order drawer, and a frozen notice once filed.
+- Seeded demo: 7 open claims, 1,356 orders, ₹5.43 L.
+- Tests: 10 claim tests (grouping, idempotent refresh, frozen after filing, new claim after filing, transitions and audit, co-founder read/export only, CSV source rows, PDF bytes).
+- Assumptions added: A37–A39.

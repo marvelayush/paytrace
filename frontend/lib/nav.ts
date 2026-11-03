@@ -1,4 +1,4 @@
-import { LayoutDashboard, ListChecks, type LucideIcon, Percent, Upload } from "lucide-react";
+import { FileWarning, LayoutDashboard, ListChecks, type LucideIcon, Percent, Upload } from "lucide-react";
 
 import type { Role } from "@/lib/auth";
 
@@ -17,6 +17,7 @@ export type NavItem = {
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Money at risk", icon: LayoutDashboard, roles: ["finance_exec", "cofounder"] },
   { href: "/orders", label: "Orders", icon: ListChecks, roles: ["finance_exec", "cofounder"] },
+  { href: "/claims", label: "Claims", icon: FileWarning, roles: ["finance_exec", "cofounder"] },
   { href: "/uploads", label: "Uploads", icon: Upload, roles: ["finance_exec"] },
   { href: "/rate-cards", label: "Rate cards", icon: Percent, roles: ["finance_exec", "cofounder"] },
 ];
