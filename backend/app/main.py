@@ -27,6 +27,7 @@ def create_app() -> FastAPI:
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],
+        expose_headers=["Content-Disposition"],  # file downloads read their name from it
     )
 
     @app.get("/health", tags=["health"])

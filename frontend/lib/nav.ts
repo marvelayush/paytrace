@@ -1,4 +1,4 @@
-import { LayoutDashboard, type LucideIcon, Percent } from "lucide-react";
+import { LayoutDashboard, type LucideIcon, Percent, Upload } from "lucide-react";
 
 import type { Role } from "@/lib/auth";
 
@@ -16,6 +16,7 @@ export type NavItem = {
  */
 export const NAV_ITEMS: NavItem[] = [
   { href: "/", label: "Money at risk", icon: LayoutDashboard, roles: ["finance_exec", "cofounder"] },
+  { href: "/uploads", label: "Uploads", icon: Upload, roles: ["finance_exec"] },
   { href: "/rate-cards", label: "Rate cards", icon: Percent, roles: ["finance_exec", "cofounder"] },
 ];
 

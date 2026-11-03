@@ -17,3 +17,19 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Fixed along the way: Tailwind's `dark:` variant was following the OS theme and half-darkening inputs. It is now class-based (light theme only).
 - Tests: 61 passing.
 - Assumptions added: A15–A23 (returns reverse fees, top-slab pricing, seed rates, definition of "received", rounding, TCS/TDS base, channel-shipped marketplace orders, gateway T+3, return window).
+
+## Milestone 3 — Sample data generator and seed
+- `scripts/generate_sample_data.py` writes a realistic month (30,000 orders, 21 Sep – 20 Oct 2026) as 15 partner reports, each in its own layout (header names, DD-MM-YYYY / ISO / DD-Mon-YYYY dates, plain / Indian-comma / ₹ amounts, grams vs kg, AWB-only courier files, one Excel), plus a "format changed" Marketplace 1 settlement report for the AI-mapping demo.
+- Correct amounts come from the expected-amount engine. Leakage is injected and labelled (≈1.6% of value): unremitted COD, unpaid settlements, excess fees, wrong weight slabs, lost returns. The brief's three orders are included exactly.
+- `scripts/seed.py [--reset]` creates the demo users, partners, sources, rate cards and an approved v1 column mapping for every source. Ingesting the sample files and the first reconciliation run are wired into the seed in Milestone 5, once the pipeline exists.
+- Tests: generator determinism, brief rows, leakage share, layout coverage. Assumptions added: A24–A25.
+
+## Milestone 4 — Upload, parsing and AI column mapping
+- Parsing (Polars, vectorised): CSV/Excel read as text, then typed per canonical field. Covers amounts with ₹/commas/brackets, date format detection per column, kg/g weights, and status / payment / leg wording. Every rejected row gets a reason naming the row, column and value.
+- Header fingerprint (normalised, sorted headers). Fingerprint matches the active mapping → processed straight away ("Using saved mapping vN"). Matches an older version → that version is proposed. Anything else → `MappingSuggester`: Gemini with JSON schema output, given headers and 5 PII-masked rows, falling back to fuzzy matching on any failure ("AI unavailable, showing best guesses").
+- Review screen: per-field column picker, confidence badge, reason, 20-row preview with failing cells inline. Fields with low confidence or failures are highlighted and must be confirmed. Approve saves the next version; rollback reactivates an earlier one. Both are audited.
+- Ingestion: COPY into a temp table, then insert. Orders are upserted; lines are de-duplicated by md5 line hash, so re-uploading a report never double-counts. PII is masked before writing (addresses not stored). Rejected rows are kept, viewable, and exportable as formula-safe CSV.
+- Uploads screen: report picker, drop zone, result card, upload history, sources with mapping versions and rollback (finance only; hidden from co-founders).
+- Found and fixed: a `.gitignore` rule that hid `frontend/components/uploads` from git and Tailwind.
+- Tests: 234 backend tests passing, including every sample file processing with zero rejections, fallback on invalid AI JSON, a payload check that no raw PII reaches the AI, rollback restoring v1, and duplicate re-uploads.
+- Assumptions added: A26–A30.

@@ -53,3 +53,27 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   }
   return body as T;
 }
+
+/** Fetch a file from the API (with the session cookie) and hand it to the browser as a download. */
+export async function downloadFile(path: string, fallbackName: string): Promise<void> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_URL}${path}`, { credentials: "include" });
+  } catch {
+    throw new ApiError(0, "Can't reach the PayTrace server. Check your connection and try again.");
+  }
+  if (!response.ok) {
+    const body: unknown = await response.json().catch(() => null);
+    throw new ApiError(response.status, readErrorDetail(body, `Download failed (${response.status}).`));
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const name = /filename="?([^"]+)"?/.exec(disposition)?.[1] ?? fallbackName;
+  const url = URL.createObjectURL(await response.blob());
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = name;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+}
