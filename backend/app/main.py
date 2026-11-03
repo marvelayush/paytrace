@@ -1,4 +1,4 @@
-from fastapi import APIRouter, FastAPI, Response, status
+from fastapi import APIRouter, FastAPI, Request, Response, status
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.exc import SQLAlchemyError
@@ -16,14 +16,30 @@ API_ROUTERS: list[APIRouter] = [auth.router, rate_cards.router, sources.router, 
 WRITE_ROUTES_OPEN_TO_ALL_ROLES = {("POST", "/auth/login"), ("POST", "/auth/logout")}
 
 
+SECURITY_HEADERS = {
+    "X-Content-Type-Options": "nosniff",
+    "X-Frame-Options": "DENY",
+    "Referrer-Policy": "no-referrer",
+    "Cache-Control": "no-store",  # financial data: never cached by browsers or proxies
+}
+
+
 def create_app() -> FastAPI:
     settings = get_settings()
-    app = FastAPI(title="PayTrace API", version="0.1.0")
+    docs = "/docs" if settings.enable_docs else None
+    app = FastAPI(title="PayTrace API", version="1.0.0", docs_url=docs, redoc_url=None, openapi_url="/openapi.json" if docs else None)
+
+    @app.middleware("http")
+    async def security_headers(request: Request, call_next):
+        response = await call_next(request)
+        for name, value in SECURITY_HEADERS.items():
+            response.headers.setdefault(name, value)
+        return response
 
     # Only the frontend may call the API with cookies.
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=[settings.frontend_origin],
+        allow_origins=settings.frontend_origins,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
         allow_headers=["Content-Type"],

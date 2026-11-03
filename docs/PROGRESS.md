@@ -69,3 +69,10 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Co-founder checked in the browser: no Uploads nav, no rate-card edit, no claim status actions, no Run reconciliation; exports still work. The API enforces the same rules (route sweep test).
 - Accessibility basics: labelled inputs and selects, visible focus rings, skip link, `aria-current` navigation, keyboard-operable table rows (Enter/Space opens the drawer), dialog titles, tooltips and aria-labels on heat-map cells, colour never alone (status pills carry text). Light theme tokens chosen for AA contrast; the `dark:` variant is class-based so the OS theme cannot half-darken the UI.
 - 280 backend tests pass; frontend lint and production build are clean.
+
+## Milestone 10 — Deployment prep
+- `render.yaml` blueprint for the API (Python 3.13, `alembic upgrade head` on start, `/health` check, generated JWT secret, secrets entered in the dashboard only). Vercel needs no config file: root directory `frontend`.
+- Backend: accepts Neon/Render `postgres://` URLs (adds the psycopg driver), several frontend origins, API docs switchable off, security headers (`nosniff`, `DENY`, `no-referrer`, `no-store`). Frontend: security headers, no `x-powered-by`, optional `/api` proxy mode (tested locally: login cookie through the proxy).
+- `deployment.md`: exact steps for Neon, seeding from your machine, Render, Vercel; demo accounts; the direct vs proxy cookie trade-off; a post-deploy checklist. README rewritten. `.env.example` lists every variable (names only).
+- Secret scan: no keys or passwords tracked; `.env` and `frontend/.env.local` are ignored.
+- Tests: 287 pass (5 new config/header/CORS tests), plus the slow 1-lakh test.

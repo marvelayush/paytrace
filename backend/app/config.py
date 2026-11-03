@@ -2,7 +2,7 @@
 
 from functools import lru_cache
 
-from pydantic import Field
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -24,7 +24,24 @@ class Settings(BaseSettings):
     cookie_secure: bool = False
     cookie_samesite: str = Field(default="lax", pattern="^(lax|strict|none)$")
 
+    # Comma-separated list of frontend origins allowed to call the API with cookies.
     frontend_origin: str = "http://localhost:3000"
+
+    # Interactive API docs (/docs). Off in production unless explicitly enabled.
+    enable_docs: bool = True
+
+    @field_validator("database_url")
+    @classmethod
+    def use_psycopg_driver(cls, url: str) -> str:
+        """Hosted Postgres (Neon, Render) hands out postgres:// or postgresql:// URLs; SQLAlchemy needs the driver named."""
+        for prefix in ("postgres://", "postgresql://"):
+            if url.startswith(prefix):
+                return "postgresql+psycopg://" + url[len(prefix):]
+        return url
+
+    @property
+    def frontend_origins(self) -> list[str]:
+        return [origin.strip().rstrip("/") for origin in self.frontend_origin.split(",") if origin.strip()]
 
     max_upload_mb: int = 50
     # Where uploaded files wait between inspection and processing (deleted after processing).

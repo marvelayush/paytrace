@@ -1,0 +1,34 @@
+# Render blueprint for the PayTrace API. Database: Neon (see deployment.md).
+# Values marked `sync: false` are entered in the Render dashboard; nothing secret lives in this file.
+services:
+  - type: web
+    name: paytrace-api
+    runtime: python
+    rootDir: backend
+    plan: free
+    region: singapore
+    buildCommand: pip install -r requirements.txt
+    # Migrations are idempotent, so running them on every start keeps the schema current.
+    startCommand: alembic upgrade head && uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.13.1
+      - key: DATABASE_URL
+        sync: false # Neon connection string (the direct, non-pooled one)
+      - key: JWT_SECRET
+        generateValue: true
+      - key: COOKIE_SECURE
+        value: "true"
+      - key: COOKIE_SAMESITE
+        value: none # direct mode: the frontend is on another site. Use "lax" in proxy mode.
+      - key: FRONTEND_ORIGIN
+        sync: false # e.g. https://paytrace.vercel.app (comma-separate several)
+      - key: GEMINI_API_KEY
+        sync: false # optional: without it, mapping suggestions use fuzzy matching
+      - key: GEMINI_MODEL
+        value: gemini-2.5-flash
+      - key: ENABLE_DOCS
+        value: "false"
+      - key: UPLOAD_DIR
+        value: /tmp/paytrace-uploads
