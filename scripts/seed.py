@@ -2,7 +2,7 @@
 
 Creates the two demo users, partners, sources, starting rate cards and a version-1 column
 mapping for every source, then processes every sample report in sample_data/ through the real
-upload pipeline and runs one full reconciliation, so the app is never empty on first login.
+upload pipeline, runs one full reconciliation and opens claims, so the app is never empty on first login.
 
 `--reset` empties every table first, for a clean demo. `--no-data` stops after the reference data.
 
@@ -35,6 +35,7 @@ from app.config import get_settings  # noqa: E402
 from app.db import SessionLocal, engine  # noqa: E402
 from app.models import Base, ColumnMapping, Partner, Source, User  # noqa: E402
 from app.sample_data.formats import FORMATS  # noqa: E402
+from app.services.claims import refresh_claims  # noqa: E402
 from app.services.matching import run_reconciliation  # noqa: E402
 from app.services.seeding import seed_initial_mappings, seed_reference_data  # noqa: E402
 from app.services.upload_processing import process_file  # noqa: E402
@@ -92,9 +93,11 @@ def load_sample_files() -> None:
             upload = process_file(db, source, mapping, sample_dir / layout.filename, layout.filename, finance_id)
             print(f"  {layout.filename:<34} {upload.status:<6} {upload.rows_ok:>6} rows  {upload.duration_ms:>5} ms")
         summary = run_reconciliation(db, started_by=finance_id, return_window_days=get_settings().return_receipt_days)
+        claim_changes = refresh_claims(db)
         db.commit()
         print(f"  reconciled {summary.order_count:,} orders in {summary.duration_ms} ms: {summary.status_counts}")
         print(f"  money at risk Rs {summary.money_at_risk_paise / 100:,.2f}; auto-matched {summary.auto_matched_pct}%")
+        print(f"  claims: {claim_changes['claims_opened']} opened with {claim_changes['added']} orders")
 
 
 def main() -> None:

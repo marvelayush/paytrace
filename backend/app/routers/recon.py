@@ -9,6 +9,7 @@ from app.config import get_settings
 from app.db import get_db
 from app.models import ReconRun, User
 from app.models.enums import RECON_STATUSES
+from app.services.claims import refresh_claims
 from app.services.matching import run_reconciliation
 from app.services.results import OrderFilters, list_orders, order_detail
 
@@ -16,10 +17,11 @@ router = APIRouter(prefix="/recon", tags=["reconciliation"], dependencies=[Depen
 
 
 def reconcile_now(db: Session, user_id: int | None) -> dict:
-    """Run reconciliation and commit. Shared by the manual trigger and by every processed upload."""
+    """Run reconciliation, bring claims up to date, commit. Shared by the manual trigger and every processed upload."""
     summary = run_reconciliation(db, started_by=user_id, return_window_days=get_settings().return_receipt_days)
+    claim_changes = refresh_claims(db)
     db.commit()
-    return summary.as_dict()
+    return {**summary.as_dict(), "claims": claim_changes}
 
 
 @router.post("/runs", status_code=status.HTTP_201_CREATED)
