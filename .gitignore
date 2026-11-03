@@ -24,7 +24,7 @@ next-env.d.ts
 .vercel/
 
 # Uploads and generated data
-uploads/
+/uploads/
 backend/uploads/
 sample_data/benchmark/
 sample_data/**/*_100k*
