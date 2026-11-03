@@ -8,6 +8,7 @@ from app.auth import current_user, require_finance_exec
 from app.config import get_settings
 from app.db import get_db
 from app.models import ColumnMapping, Partner, Source, Upload, UploadRowError, User
+from app.routers.recon import reconcile_now
 from app.routers.sources import get_source, mapping_out, source_out
 from app.schemas.uploads import InspectOut, ProcessOut, ProcessRequest, RowErrorOut, SuggestionOut, UploadOut
 from app.services.canonical import CANONICAL_FIELDS
@@ -149,7 +150,9 @@ def process_upload(
         upload = process_file(db, source, mapping, stored.path, stored.filename, user.id)
     finally:
         discard_upload(stored)
-    return ProcessOut(upload=upload_out(db, upload), reconciliation=None)
+    # New data changes results: re-run reconciliation straight away so nothing on screen is stale.
+    reconciliation = reconcile_now(db, user.id) if upload.status == "done" and upload.rows_ok else None
+    return ProcessOut(upload=upload_out(db, upload), reconciliation=reconciliation)
 
 
 @router.get("/uploads", response_model=list[UploadOut])
