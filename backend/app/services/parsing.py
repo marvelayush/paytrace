@@ -173,6 +173,7 @@ class ParseResult:
     rejected: list[tuple[int, str]] = field(default_factory=list)
     # field -> list of (row_number, message) for every cell that failed, for the preview
     cell_errors: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
+    all_rows: pl.DataFrame | None = None  # every row, typed, including rejected ones (preview only)
 
     @property
     def total(self) -> int:
@@ -269,4 +270,4 @@ def apply_mapping(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | 
     bad = reasons.is_not_null()
     rejected_frame = pl.DataFrame({"row": row_numbers, "reason": reasons}).filter(bad)
     rejected = list(zip(rejected_frame["row"].to_list(), rejected_frame["reason"].to_list()))
-    return ParseResult(rows=result_frame.filter(~bad), rejected=rejected, cell_errors=cell_errors)
+    return ParseResult(rows=result_frame.filter(~bad), rejected=rejected, cell_errors=cell_errors, all_rows=result_frame)

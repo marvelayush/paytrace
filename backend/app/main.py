@@ -5,11 +5,11 @@ from sqlalchemy.exc import SQLAlchemyError
 
 from app.config import get_settings
 from app.db import engine
-from app.routers import auth, rate_cards
+from app.routers import auth, rate_cards, sources, uploads
 
 # Every feature router. Listed here (not only passed to include_router) so the access-control
 # test can inspect each route's dependencies directly.
-API_ROUTERS: list[APIRouter] = [auth.router, rate_cards.router]
+API_ROUTERS: list[APIRouter] = [auth.router, rate_cards.router, sources.router, uploads.router]
 
 # Routes that change data but are deliberately open to every role (or to no one signed in).
 # The access-control test fails if any other write route lacks the finance-exec guard.

@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     frontend_origin: str = "http://localhost:3000"
 
     max_upload_mb: int = 50
+    # Where uploaded files wait between inspection and processing (deleted after processing).
+    upload_dir: str = "uploads"
 
     # A8/A23: days after a return within which the warehouse must scan it in.
     return_receipt_days: int = 7

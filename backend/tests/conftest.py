@@ -8,6 +8,11 @@ TEST_DATABASE_URL = os.environ.get(
 )
 os.environ["DATABASE_URL"] = TEST_DATABASE_URL
 os.environ.setdefault("JWT_SECRET", "test-only-secret-not-used-anywhere-else-0123456789")
+# Uploaded files go to a throwaway folder; the AI is never called from tests.
+import tempfile  # noqa: E402
+
+os.environ["UPLOAD_DIR"] = tempfile.mkdtemp(prefix="paytrace-test-uploads-")
+os.environ["GEMINI_API_KEY"] = ""
 
 from collections.abc import Iterator  # noqa: E402
 
