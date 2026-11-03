@@ -28,6 +28,9 @@ class Settings(BaseSettings):
 
     max_upload_mb: int = 50
 
+    # A8/A23: days after a return within which the warehouse must scan it in.
+    return_receipt_days: int = 7
+
     login_max_attempts: int = 5
     login_window_seconds: int = 60
 

@@ -1,7 +1,6 @@
 """Seed the database with demo data.
 
-Milestone 1: creates the two demo users. Partners, rate cards, sample files and a first
-reconciliation run are added in Milestone 3.
+Creates the two demo users, partners, sources and starting rate cards.
 
 Passwords come from DEMO_FINANCE_PASSWORD and DEMO_FOUNDER_PASSWORD (never hard-coded).
 Safe to run more than once: existing users keep their id, and their name, role and password are updated.
@@ -28,6 +27,7 @@ from sqlalchemy import select  # noqa: E402
 from app.auth import hash_password  # noqa: E402
 from app.db import SessionLocal  # noqa: E402
 from app.models import User  # noqa: E402
+from app.services.seeding import seed_reference_data  # noqa: E402
 
 DEMO_USERS = [
     ("finance@paytrace.demo", "Priya (Finance)", "finance_exec", "DEMO_FINANCE_PASSWORD"),
@@ -52,7 +52,16 @@ def seed_users() -> None:
         db.commit()
 
 
+def seed_partners_and_rate_cards() -> None:
+    with SessionLocal() as db:
+        partners = seed_reference_data(db)
+        db.commit()
+        print(f"  {len(partners)} partners with sources and rate cards")
+
+
 if __name__ == "__main__":
     print("Seeding demo users...")
     seed_users()
+    print("Seeding partners, sources and rate cards...")
+    seed_partners_and_rate_cards()
     print("Done.")
