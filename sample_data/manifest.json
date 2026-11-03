@@ -1,0 +1,60 @@
+{
+  "period": {
+    "from": "2026-09-21",
+    "to": "2026-10-20"
+  },
+  "orders": 30000,
+  "orders_by_channel": {
+    "Website": 12000,
+    "Marketplace 1": 6000,
+    "Marketplace 2": 4500,
+    "Marketplace 3": 3000,
+    "QuickCom 1": 2700,
+    "QuickCom 2": 1800
+  },
+  "order_value_rupees": 35870434.0,
+  "injected_leakage": {
+    "lost_return": {
+      "orders": 159,
+      "rupees": 180537.0
+    },
+    "short_commission": {
+      "orders": 651,
+      "rupees": 50103.0
+    },
+    "unpaid_settlement": {
+      "orders": 246,
+      "rupees": 216855.59
+    },
+    "unremitted_cod": {
+      "orders": 106,
+      "rupees": 123363.78
+    },
+    "wrong_weight_slab": {
+      "orders": 260,
+      "rupees": 12747.0
+    }
+  },
+  "leakage_rupees": 583606.37,
+  "leakage_share_of_value": 0.0163,
+  "files": [
+    "courierA_cod_remittance.csv",
+    "courierA_freight_invoice.csv",
+    "courierB_cod_remittance.csv",
+    "courierB_freight_invoice.csv",
+    "format_changed/marketplace1_settlement_NEW_FORMAT.csv",
+    "marketplace1_orders.csv",
+    "marketplace1_settlement.xlsx",
+    "marketplace2_orders.csv",
+    "marketplace2_settlement.csv",
+    "marketplace3_orders.csv",
+    "marketplace3_settlement.csv",
+    "quickcom1_orders.csv",
+    "quickcom1_payouts.csv",
+    "quickcom2_orders.csv",
+    "quickcom2_payouts.csv",
+    "warehouse_return_scans.csv",
+    "website_gateway_settlement.csv",
+    "website_orders.csv"
+  ]
+}
