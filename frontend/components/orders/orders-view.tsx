@@ -112,7 +112,7 @@ function FilterSelect({
 }) {
   return (
     <Select value={value ?? ALL} onValueChange={(next) => onChange(next === ALL ? undefined : next)}>
-      <SelectTrigger aria-label={label} className={cn("h-9 bg-card", value && "border-primary/40 bg-sidebar-accent", className)}>
+      <SelectTrigger aria-label={label} className={cn("h-9 w-full bg-card", value && "border-primary/40 bg-sidebar-accent", className)}>
         <SelectValue />
       </SelectTrigger>
       <SelectContent>{children}</SelectContent>

@@ -62,3 +62,10 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Screen: four KPIs (money at risk, auto-matched vs the 98% target, open/filed/recovered claims, TCS + TDS labelled "Tax, not leakage"), a heat-tinted matrix (one hue, square-root scale so small amounts stay visible, hover title + accessible label per cell, click → filtered orders), "Why money is at risk" bars linking to each status, and a partner-wise tax table. Finance users get a "Run reconciliation" button.
 - The seeded demo shows ₹5.43 L at risk across 1,356 orders, 99.2% auto-matched and ₹1.19 L tax withheld. Matrix, totals, KPI and open claims all agree to the paisa (test).
 - Tests: 4 dashboard tests (empty state, matrix sums, tax kept apart, run info).
+
+## Milestone 9 — Polish pass
+- Every screen checked at 375 px (dashboard, orders, claims list and detail, rate cards, uploads, mobile menu) by loading each page in a 375 px same-origin frame. Fixed: order filters now fill their grid cells on phones, age labels shortened, empty matrix totals show "—" instead of ₹0, PDF columns spaced with repeating headers, the drawer widened (the Sheet's own width variant had won on specificity).
+- Every screen has loading (skeletons), empty and error (retry) states. Error and empty copy says what to do next.
+- Co-founder checked in the browser: no Uploads nav, no rate-card edit, no claim status actions, no Run reconciliation; exports still work. The API enforces the same rules (route sweep test).
+- Accessibility basics: labelled inputs and selects, visible focus rings, skip link, `aria-current` navigation, keyboard-operable table rows (Enter/Space opens the drawer), dialog titles, tooltips and aria-labels on heat-map cells, colour never alone (status pills carry text). Light theme tokens chosen for AA contrast; the `dark:` variant is class-based so the OS theme cannot half-darken the UI.
+- 280 backend tests pass; frontend lint and production build are clean.
