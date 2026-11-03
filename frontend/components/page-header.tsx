@@ -37,3 +37,29 @@ export function EmptyState({
     </div>
   );
 }
+
+export function ErrorState({
+  title = "Couldn't load this",
+  message,
+  onRetry,
+}: {
+  title?: string;
+  message: string;
+  onRetry?: () => void;
+}) {
+  return (
+    <div role="alert" className="flex flex-col items-center rounded-xl border border-loss/20 bg-loss-soft px-6 py-12 text-center">
+      <h2 className="text-sm font-semibold text-loss">{title}</h2>
+      <p className="mt-1.5 max-w-md text-sm text-foreground/80">{message}</p>
+      {onRetry && (
+        <button
+          type="button"
+          onClick={onRetry}
+          className="mt-4 rounded-lg border bg-card px-3 py-1.5 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+        >
+          Try again
+        </button>
+      )}
+    </div>
+  );
+}

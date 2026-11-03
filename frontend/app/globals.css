@@ -2,6 +2,10 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
+/* Dark styles only apply under a .dark class (never set: PayTrace ships light only),
+   instead of following the OS setting, which would half-darken components. */
+@custom-variant dark (&:is(.dark *));
+
 /*
  * PayTrace design tokens.
  * Near-white background, zinc neutrals, ONE accent (deep indigo) for primary actions.
