@@ -1,10 +1,14 @@
-"""Idempotent creation of reference data: partners, sources and starting rate cards."""
+"""Idempotent creation of reference data: partners, sources, starting rate cards and v1 column mappings."""
+
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
-from app.models import Partner, RateCard, Source, WeightSlab
+from app.models import ColumnMapping, Partner, RateCard, Source, WeightSlab
+from app.sample_data.formats import format_for
 from app.services import reference_data as ref
+from app.services.fingerprint import header_fingerprint
 
 
 def seed_reference_data(db: Session) -> dict[str, Partner]:
@@ -49,3 +53,29 @@ def _ensure_rate_card(db: Session, partner: Partner, terms: dict, slabs: list[tu
     db.flush()
     for leg, up_to_g, price_paise in slabs:
         db.add(WeightSlab(rate_card_id=card.id, leg=leg, up_to_g=up_to_g, price_paise=price_paise))
+
+
+def seed_initial_mappings(db: Session, created_by: int | None) -> int:
+    """Version 1 mapping for every source, matching that partner's standard layout. Returns how many were added."""
+    added = 0
+    sources = db.execute(select(Source, Partner).join(Partner, Partner.id == Source.partner_id)).all()
+    for source, partner in sources:
+        has_mapping = db.scalar(select(ColumnMapping.id).where(ColumnMapping.source_id == source.id).limit(1))
+        if has_mapping is not None:
+            continue
+        layout = format_for(partner.name, source.file_kind)
+        db.add(
+            ColumnMapping(
+                source_id=source.id,
+                version=1,
+                mapping_json=layout.mapping(),
+                header_fingerprint=header_fingerprint(layout.headers),
+                created_by=created_by,
+                approved_at=datetime.now(timezone.utc),
+                is_active=True,
+                notes="Seeded: the partner's standard report layout.",
+            )
+        )
+        added += 1
+    db.flush()
+    return added
