@@ -1,0 +1,121 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+/*
+ * PayTrace design tokens.
+ * Near-white background, zinc neutrals, ONE accent (deep indigo) for primary actions.
+ * Semantic colours carry meaning only: loss = money lost/at risk, attention = needs a look,
+ * settled = paid correctly. Never use them for decoration.
+ */
+
+@theme inline {
+  --font-sans: var(--font-geist-sans);
+  --font-mono: var(--font-geist-mono);
+  --font-heading: var(--font-geist-sans);
+
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+
+  /* Semantic money colours */
+  --color-loss: var(--loss);
+  --color-loss-soft: var(--loss-soft);
+  --color-attention: var(--attention);
+  --color-attention-soft: var(--attention-soft);
+  --color-settled: var(--settled);
+  --color-settled-soft: var(--settled-soft);
+
+  --color-sidebar: var(--sidebar);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root {
+  --radius: 0.5rem;
+
+  /* Neutrals (zinc) */
+  --background: oklch(0.985 0.0015 286);          /* near-white page */
+  --foreground: oklch(0.21 0.006 285.9);          /* zinc-900 */
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.21 0.006 285.9);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.21 0.006 285.9);
+  --secondary: oklch(0.967 0.001 286.4);          /* zinc-100 */
+  --secondary-foreground: oklch(0.21 0.006 285.9);
+  --muted: oklch(0.967 0.001 286.4);
+  --muted-foreground: oklch(0.52 0.016 285.9);    /* between zinc-500 and 600: passes AA on white */
+  --accent: oklch(0.967 0.001 286.4);             /* hover surface, not a brand colour */
+  --accent-foreground: oklch(0.21 0.006 285.9);
+  --border: oklch(0.92 0.004 286.3);              /* zinc-200 */
+  --input: oklch(0.87 0.006 286.3);               /* zinc-300, visible field edges */
+
+  /* The one accent: deep indigo */
+  --primary: oklch(0.457 0.24 277);               /* indigo-700 */
+  --primary-foreground: oklch(0.985 0 0);
+  --ring: oklch(0.585 0.233 277.1);               /* indigo-500 */
+
+  /* Semantic */
+  --destructive: oklch(0.577 0.245 27.3);         /* red-600 */
+  --loss: oklch(0.577 0.245 27.3);                /* red-600 */
+  --loss-soft: oklch(0.971 0.013 17.4);           /* red-50 */
+  --attention: oklch(0.555 0.163 48.998);         /* amber-700, readable as text */
+  --attention-soft: oklch(0.987 0.022 95.3);      /* amber-50 */
+  --settled: oklch(0.527 0.137 150.1);            /* green-700 */
+  --settled-soft: oklch(0.982 0.018 155.8);       /* green-50 */
+
+  /* Sidebar */
+  --sidebar: oklch(1 0 0);
+  --sidebar-foreground: oklch(0.37 0.013 285.8);  /* zinc-700 */
+  --sidebar-border: oklch(0.92 0.004 286.3);
+  --sidebar-accent: oklch(0.962 0.018 272.3);     /* indigo-50: active nav item */
+  --sidebar-accent-foreground: oklch(0.398 0.195 277.4); /* indigo-800 */
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    @apply font-sans;
+    -webkit-text-size-adjust: 100%;
+  }
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+  button:not(:disabled),
+  [role="button"]:not(:disabled) {
+    cursor: pointer;
+  }
+}
+
+@layer utilities {
+  /* All money values: aligned digits so columns of amounts line up. */
+  .money {
+    font-variant-numeric: tabular-nums;
+    font-feature-settings: "tnum" 1;
+  }
+}
