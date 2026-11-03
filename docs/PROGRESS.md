@@ -40,3 +40,10 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Benchmark (`scripts/benchmark_matching.py`, `docs/BENCHMARK.md`): **100,000 orders + 2,55,199 partner rows end to end in 18.2 s** (target < 60 s). 4,262 of 4,262 due leaks flagged, 0 false alarms. Dropping row-by-row foreign keys on bulk tables cut it from 31.4 s. The 15 s stretch is missed by about 3 s, spent maintaining the join-key indexes the spec requires.
 - Tests: scalar/vectorised engines agree on 6,000 orders; every status rule and ₹10 boundary; TCS/TDS excluded from the difference; multiple lines summed; AWB-only matching; full DB path; slow test for 1 lakh < 60 s (`pytest -m slow`, passes in 32 s including generation). 259 tests pass by default.
 - Assumptions added: A31–A36.
+
+## Milestone 6 — Orders screen and order drawer
+- API: `GET /recon/orders` (filters: owing partner, status or "flagged", age bucket, order ID / AWB search; sorts; totals for the filtered set) and `GET /recon/orders/{id}` (order facts with PII masked, itemised expected breakdown, TCS/TDS apart, every settlement / COD / freight / warehouse line with its file name and row number, and whether it matched by order ID or AWB).
+- Orders screen: filters synced to the URL (the dashboard links into it), debounced search, clear filters, "N orders · ₹X at risk", virtualised table (TanStack Table + Virtual, infinite loading in pages of 200) with right-aligned tabular money, red shortfalls and status pills. Row click or Enter opens the drawer.
+- Drawer: expected / received / difference cards, a one-sentence explanation of what is wrong and who owes it, "Where every rupee went" (rate card side by side with what partners paid), a tax-not-leakage note, evidence lines, and order facts.
+- Tests: 7 API tests (filters, sorting, search, totals, breakdown, AWB-matched evidence, masked customer).
+- TanStack Table is pinned to v8.21.3, the current stable API (v9 rewrote it).
