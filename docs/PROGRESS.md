@@ -33,3 +33,10 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Found and fixed: a `.gitignore` rule that hid `frontend/components/uploads` from git and Tailwind.
 - Tests: 234 backend tests passing, including every sample file processing with zero rejections, fallback on invalid AI JSON, a payload check that no raw PII reaches the AI, rollback restoring v1, and duplicate re-uploads.
 - Assumptions added: A26–A30.
+
+## Milestone 5 — Matching engine and benchmark
+- `services/matching.py`: loads with COPY TO STDOUT, then Polars only. Rate card in force by as-of join, courier slab by forward as-of join, lines summed per order and matched by order ID or AWB, status rules in documented order (₹10 tolerance), at-risk amount, paying partner, due date and age. Results go back via COPY in one transaction; one run at a time (advisory lock).
+- Runs: `POST /recon/runs`, `GET /recon/runs/latest`. Every processed upload re-runs reconciliation. The seed script now loads all 15 sample reports through the real pipeline and reconciles: 30,000 orders, ₹5.43 L at risk, 99.17% auto-matched.
+- Benchmark (`scripts/benchmark_matching.py`, `docs/BENCHMARK.md`): **100,000 orders + 2,55,199 partner rows end to end in 18.2 s** (target < 60 s). 4,262 of 4,262 due leaks flagged, 0 false alarms. Dropping row-by-row foreign keys on bulk tables cut it from 31.4 s. The 15 s stretch is missed by about 3 s, spent maintaining the join-key indexes the spec requires.
+- Tests: scalar/vectorised engines agree on 6,000 orders; every status rule and ₹10 boundary; TCS/TDS excluded from the difference; multiple lines summed; AWB-only matching; full DB path; slow test for 1 lakh < 60 s (`pytest -m slow`, passes in 32 s including generation). 259 tests pass by default.
+- Assumptions added: A31–A36.

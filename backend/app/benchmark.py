@@ -1,0 +1,155 @@
+"""The 1-lakh-row benchmark, shared by scripts/benchmark_matching.py and the slow pytest.
+
+Full pipeline, timed per stage: generate partner files -> parse -> normalise -> COPY into Postgres
+(for every report) -> load -> match -> COPY results. Then checks every injected leak was flagged.
+"""
+
+import platform
+import time
+from dataclasses import dataclass, field
+from datetime import date, timedelta
+from pathlib import Path
+
+import polars as pl
+from sqlalchemy import select, text
+from sqlalchemy.orm import Session
+
+from app.models import Base, ColumnMapping, Partner, Source
+from app.sample_data.formats import FORMATS, write_all
+from app.sample_data.generator import generate
+from app.services.matching import FLAGGED_STATUSES, run_reconciliation
+from app.services.seeding import seed_initial_mappings, seed_reference_data
+from app.services.upload_processing import process_file
+
+AS_OF = date(2026, 11, 3)
+
+
+@dataclass
+class BenchmarkResult:
+    orders: int
+    rows_total: int
+    generate_s: float
+    ingest_s: float
+    files: list[tuple[str, int, int]] = field(default_factory=list)  # filename, rows, ms
+    recon_stage_ms: dict[str, int] = field(default_factory=dict)
+    recon_s: float = 0.0
+    status_counts: dict[str, int] = field(default_factory=dict)
+    injected: int = 0
+    caught: int = 0
+    false_alarms: int = 0
+    money_at_risk_paise: int = 0
+    auto_matched_pct: float = 0.0
+
+    @property
+    def end_to_end_s(self) -> float:
+        """Parse -> normalise -> match -> write: everything except generating the synthetic files."""
+        return self.ingest_s + self.recon_s
+
+
+def reset(db: Session) -> None:
+    tables = ", ".join(table.name for table in Base.metadata.sorted_tables)
+    db.execute(text(f"TRUNCATE {tables} RESTART IDENTITY CASCADE"))
+    db.commit()
+
+
+def run_benchmark(db: Session, work_dir: Path, n_orders: int = 100_000, seed: int = 424242) -> BenchmarkResult:
+    reset(db)
+    seed_reference_data(db)
+    seed_initial_mappings(db, created_by=None)
+    db.commit()
+
+    started = time.perf_counter()
+    data = generate(n_orders=n_orders, seed=seed)
+    write_all(data, work_dir)
+    generate_s = time.perf_counter() - started
+
+    result = BenchmarkResult(orders=n_orders, rows_total=0, generate_s=generate_s, ingest_s=0.0)
+    ingest_started = time.perf_counter()
+    for layout in FORMATS:
+        source = db.scalar(
+            select(Source).join(Partner, Partner.id == Source.partner_id).where(Partner.name == layout.partner, Source.file_kind == layout.file_kind)
+        )
+        mapping = db.scalar(select(ColumnMapping).where(ColumnMapping.source_id == source.id, ColumnMapping.is_active))
+        upload = process_file(db, source, mapping, work_dir / layout.filename, layout.filename, None)
+        if upload.status != "done":
+            raise RuntimeError(f"{layout.filename} failed: {upload.error}")
+        result.files.append((layout.filename, upload.row_count, upload.duration_ms or 0))
+        result.rows_total += upload.row_count
+    result.ingest_s = time.perf_counter() - ingest_started
+
+    recon_started = time.perf_counter()
+    summary = run_reconciliation(db, started_by=None, as_of=AS_OF)
+    db.commit()
+    result.recon_s = time.perf_counter() - recon_started
+    result.recon_stage_ms = summary.stage_ms
+    result.status_counts = summary.status_counts
+    result.money_at_risk_paise = summary.money_at_risk_paise
+    result.auto_matched_pct = summary.auto_matched_pct
+
+    # Detection quality: every injected leak that is already due must be flagged; nothing else may be.
+    flagged = set(
+        db.scalars(text("SELECT order_id FROM recon_results WHERE status = ANY(:statuses)"), {"statuses": list(FLAGGED_STATUSES)})
+    )
+    orders = {order["order_id"]: order for order in data.orders}
+    due_leaks = set()
+    for order_id, leak_type, _ in data.injected:
+        order = orders[order_id]
+        if leak_type == "lost_return" and order["returned_date"] + timedelta(days=7) >= AS_OF:
+            continue
+        cycle = 10 if leak_type == "unremitted_cod" else 7
+        if leak_type in ("unremitted_cod", "unpaid_settlement") and order["delivered_date"] + timedelta(days=cycle) >= AS_OF:
+            continue
+        due_leaks.add(order_id)
+    result.injected = len(due_leaks)
+    result.caught = len(due_leaks & flagged)
+    result.false_alarms = len(flagged - {order_id for order_id, _, _ in data.injected})
+    return result
+
+
+def markdown_report(result: BenchmarkResult) -> str:
+    stages = result.recon_stage_ms
+    files = "\n".join(f"| {name} | {rows:,} | {ms:,} |" for name, rows, ms in result.files)
+    statuses = "\n".join(f"| `{status}` | {count:,} |" for status, count in sorted(result.status_counts.items()))
+    verdict = "PASS" if result.end_to_end_s < 60 else "FAIL"
+    return f"""# Benchmark: 1 lakh orders end to end
+
+Brief: *matching 1 lakh rows in under a minute.* Generated by `scripts/benchmark_matching.py`.
+
+**Result: {result.end_to_end_s:.1f} s end to end for {result.orders:,} orders and {result.rows_total:,} partner rows — {verdict} (target < 60 s, stretch < 15 s).**
+
+| Stage | Time |
+|---|---|
+| Parse + normalise + COPY all {len(result.files)} partner files ({result.rows_total:,} rows) | {result.ingest_s:.2f} s |
+| Reconciliation: load from Postgres (COPY TO STDOUT) | {stages.get('load', 0) / 1000:.2f} s |
+| Reconciliation: match (Polars joins, expected amounts, status rules) | {stages.get('match', 0) / 1000:.2f} s |
+| Reconciliation: write {result.orders:,} results (COPY) | {stages.get('write', 0) / 1000:.2f} s |
+| **End to end (parse → normalise → match → write)** | **{result.end_to_end_s:.2f} s** |
+| (Generating the synthetic files, not part of the pipeline) | {result.generate_s:.2f} s |
+
+## Detection check
+
+- Injected leaks already due by {AS_OF}: **{result.injected:,}**, flagged: **{result.caught:,}** ({100 * result.caught / max(result.injected, 1):.1f}%).
+- Orders flagged without an injected leak (false alarms): **{result.false_alarms}**.
+- Auto-matched: **{result.auto_matched_pct}%** of orders where money should have moved (brief target 98%).
+- Money at risk found: **₹{result.money_at_risk_paise / 100:,.2f}**.
+
+| Status | Orders |
+|---|---|
+{statuses}
+
+## Per file
+
+| File | Rows | Parse + normalise + COPY (ms) |
+|---|---|---|
+{files}
+
+## Machine
+
+{platform.system()} {platform.release()} · {platform.processor() or platform.machine()} · Python {platform.python_version()} · Polars {pl.__version__} · PostgreSQL 16 in Docker on the same machine.
+
+## How it stays fast
+
+- Every file is read and typed with vectorised Polars expressions: no Python loop per row.
+- Rows enter Postgres with `COPY` into a temporary table, then one `INSERT … SELECT` (de-duplication by md5 line hash happens inside Postgres).
+- Matching loads each table once with `COPY … TO STDOUT`, then uses hash joins and as-of joins (rate card in force, weight slab), and writes results back with `COPY` in a single transaction.
+"""

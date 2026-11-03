@@ -28,9 +28,10 @@ class ReconResult(Base):
     __tablename__ = "recon_results"
     __table_args__ = (one_of("status", RECON_STATUSES),)
 
-    run_id: Mapped[int] = mapped_column(ForeignKey("recon_runs.id", ondelete="CASCADE"), primary_key=True)
+    # No foreign keys: 1 lakh rows are rewritten by COPY on every run, and FK checks run row by row.
+    run_id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     order_id: Mapped[str] = mapped_column(String(40), primary_key=True, index=True)
-    partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), index=True)
+    partner_id: Mapped[int] = mapped_column(BigInteger, index=True)
     expected_paise: Mapped[int] = mapped_column(BigInteger)
     received_paise: Mapped[int] = mapped_column(BigInteger)
     diff_paise: Mapped[int] = mapped_column(BigInteger)

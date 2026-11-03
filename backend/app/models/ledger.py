@@ -1,8 +1,13 @@
-"""Normalised partner data: orders, and every line that pays for or charges against them."""
+"""Normalised partner data: orders, and every line that pays for or charges against them.
+
+These are the high-volume tables (lakhs of rows per month). They carry no database-level foreign keys:
+Postgres checks those row by row, which tripled bulk-load time. Only the ingest pipeline writes here, and it
+takes every partner and upload id from records it has just validated (see docs/DECISIONS.md).
+"""
 
 from datetime import date, datetime
 
-from sqlalchemy import BigInteger, Date, DateTime, ForeignKey, Integer, String, UniqueConstraint
+from sqlalchemy import BigInteger, Date, DateTime, Integer, String, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import Base, one_of
@@ -14,8 +19,8 @@ class Order(Base):
     __table_args__ = (one_of("payment_mode", PAYMENT_MODES), one_of("delivery_status", DELIVERY_STATUSES))
 
     order_id: Mapped[str] = mapped_column(String(40), primary_key=True)
-    channel_partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), index=True)
-    courier_partner_id: Mapped[int | None] = mapped_column(ForeignKey("partners.id"), index=True)
+    channel_partner_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    courier_partner_id: Mapped[int | None] = mapped_column(BigInteger, index=True)
     # Courier tracking number; COD remittances and freight lines may reference it instead of order_id.
     awb: Mapped[str | None] = mapped_column(String(40), index=True)
     order_date: Mapped[date] = mapped_column(Date)
@@ -38,8 +43,8 @@ class SettlementLine(Base):
     __table_args__ = (UniqueConstraint("partner_id", "line_hash", name="uq_settlement_lines_partner_hash"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    upload_id: Mapped[int] = mapped_column(ForeignKey("uploads.id", ondelete="CASCADE"), index=True)
-    partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), index=True)
+    upload_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    partner_id: Mapped[int] = mapped_column(BigInteger)  # indexed by the unique (partner_id, line_hash)
     order_id: Mapped[str] = mapped_column(String(40), index=True)
     settlement_date: Mapped[date | None] = mapped_column(Date)
     gross_paise: Mapped[int] = mapped_column(BigInteger, default=0)
@@ -59,8 +64,8 @@ class CodRemittance(Base):
     __table_args__ = (UniqueConstraint("courier_partner_id", "line_hash", name="uq_cod_remittances_partner_hash"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    upload_id: Mapped[int] = mapped_column(ForeignKey("uploads.id", ondelete="CASCADE"), index=True)
-    courier_partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), index=True)
+    upload_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    courier_partner_id: Mapped[int] = mapped_column(BigInteger)  # indexed by the unique (partner, line_hash)
     order_id: Mapped[str | None] = mapped_column(String(40), index=True)
     awb: Mapped[str | None] = mapped_column(String(40), index=True)
     remittance_date: Mapped[date | None] = mapped_column(Date)
@@ -79,8 +84,8 @@ class FreightLine(Base):
     )
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    upload_id: Mapped[int] = mapped_column(ForeignKey("uploads.id", ondelete="CASCADE"), index=True)
-    courier_partner_id: Mapped[int] = mapped_column(ForeignKey("partners.id"), index=True)
+    upload_id: Mapped[int] = mapped_column(BigInteger, index=True)
+    courier_partner_id: Mapped[int] = mapped_column(BigInteger)  # indexed by the unique (partner, line_hash)
     order_id: Mapped[str | None] = mapped_column(String(40), index=True)
     awb: Mapped[str | None] = mapped_column(String(40), index=True)
     charged_weight_g: Mapped[int | None] = mapped_column(Integer)
@@ -99,7 +104,7 @@ class WarehouseReceipt(Base):
     __table_args__ = (UniqueConstraint("line_hash", name="uq_warehouse_receipts_hash"),)
 
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
-    upload_id: Mapped[int] = mapped_column(ForeignKey("uploads.id", ondelete="CASCADE"), index=True)
+    upload_id: Mapped[int] = mapped_column(BigInteger, index=True)
     order_id: Mapped[str] = mapped_column(String(40), index=True)
     received_at: Mapped[datetime] = mapped_column(DateTime(timezone=True))
     # Hash of the canonical values: the same line uploaded twice is stored once.

@@ -392,7 +392,7 @@ def run_reconciliation(db: Session, started_by: int | None, as_of: date | None =
     mark = lap("load", mark)
     results, unmatched = reconcile(inputs, as_of, return_window_days)
     mark = lap("match", mark)
-    db.execute(text("DELETE FROM recon_results"))
+    db.execute(text("TRUNCATE recon_results"))  # transactional in Postgres; far faster than DELETE
     copy_frame(db, "recon_results", _results_for_copy(results, run.id))
     mark = lap("write", mark)
 
