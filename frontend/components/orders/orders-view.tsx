@@ -203,7 +203,7 @@ export function OrdersView() {
             <SelectSeparator />
             {AGE_BUCKETS.map((bucket) => (
               <SelectItem key={bucket} value={bucket}>
-                {bucket} days overdue
+                {bucket} days
               </SelectItem>
             ))}
           </FilterSelect>

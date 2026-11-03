@@ -56,3 +56,9 @@ One entry per milestone: what was built, what works, and assumptions added.
 - Seeded demo: 7 open claims, 1,356 orders, ₹5.43 L.
 - Tests: 10 claim tests (grouping, idempotent refresh, frozen after filing, new claim after filing, transitions and audit, co-founder read/export only, CSV source rows, PDF bytes).
 - Assumptions added: A37–A39.
+
+## Milestone 8 — Money-at-risk dashboard
+- `GET /dashboard`: last run (as of, finished at, duration, orders, auto-match %, lines with no order), KPIs, partner × age-bucket matrix with bucket totals, breakdown by status, TCS/TDS by partner.
+- Screen: four KPIs (money at risk, auto-matched vs the 98% target, open/filed/recovered claims, TCS + TDS labelled "Tax, not leakage"), a heat-tinted matrix (one hue, square-root scale so small amounts stay visible, hover title + accessible label per cell, click → filtered orders), "Why money is at risk" bars linking to each status, and a partner-wise tax table. Finance users get a "Run reconciliation" button.
+- The seeded demo shows ₹5.43 L at risk across 1,356 orders, 99.2% auto-matched and ₹1.19 L tax withheld. Matrix, totals, KPI and open claims all agree to the paisa (test).
+- Tests: 4 dashboard tests (empty state, matrix sums, tax kept apart, run info).
