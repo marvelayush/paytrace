@@ -14,9 +14,12 @@ class ReconRun(Base):
     id: Mapped[int] = mapped_column(BigInteger, primary_key=True)
     started_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))
     started_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
+    as_of: Mapped[date] = mapped_column(Date)  # "today" used for due dates and ages
     finished_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
     order_count: Mapped[int] = mapped_column(Integer, default=0)
     duration_ms: Mapped[int | None] = mapped_column(Integer)
+    # Per-stage timings and status counts, shown in the UI and the benchmark.
+    stats_json: Mapped[dict | None] = mapped_column(JSONB)
 
 
 class ReconResult(Base):
@@ -31,6 +34,10 @@ class ReconResult(Base):
     expected_paise: Mapped[int] = mapped_column(BigInteger)
     received_paise: Mapped[int] = mapped_column(BigInteger)
     diff_paise: Mapped[int] = mapped_column(BigInteger)
+    # What we would claim for this order (0 when settled or pending). For lost returns this is the goods value.
+    at_risk_paise: Mapped[int] = mapped_column(BigInteger, default=0)
+    expected_freight_paise: Mapped[int] = mapped_column(BigInteger, default=0)
+    charged_freight_paise: Mapped[int] = mapped_column(BigInteger, default=0)
     # Taxes are kept apart from the difference: tax is not leakage (A6).
     tcs_paise: Mapped[int] = mapped_column(BigInteger, default=0)
     tds_paise: Mapped[int] = mapped_column(BigInteger, default=0)
