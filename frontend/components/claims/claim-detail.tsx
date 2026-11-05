@@ -47,7 +47,14 @@ function StatusAction({ claim, next }: { claim: ClaimDetail; next: ClaimStatus }
 
   return (
     <>
-      <Button size="sm" variant={next === "rejected" ? "outline" : "default"} onClick={() => setOpen(true)}>
+      <Button
+        size="sm"
+        variant={next === "rejected" ? "outline" : "default"}
+        onClick={() => {
+          change.reset();
+          setOpen(true);
+        }}
+      >
         {copy.button}
       </Button>
       <Dialog open={open} onOpenChange={setOpen}>
@@ -74,17 +81,16 @@ function StatusAction({ claim, next }: { claim: ClaimDetail; next: ClaimStatus }
             </Button>
             <Button
               disabled={change.isPending}
-              onClick={() =>
+              onClick={() => {
+                // Optimistic: the claim shows its new status straight away; an API refusal puts it back.
+                const label = CLAIM_STATUS_META[next].label.toLowerCase();
+                setOpen(false);
+                toast.success(`Claim #${claim.id} marked ${label}`);
                 change.mutate(
                   { status: next, reference: next === "filed" ? reference : undefined },
-                  {
-                    onSuccess: () => {
-                      toast.success(`Claim #${claim.id} marked ${CLAIM_STATUS_META[next].label.toLowerCase()}`);
-                      setOpen(false);
-                    },
-                  },
-                )
-              }
+                  { onError: (error) => toast.error(`Claim #${claim.id} was not marked ${label}: ${error.message}`) },
+                );
+              }}
             >
               {change.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
               {copy.button}
@@ -211,7 +217,38 @@ export function ClaimDetailView({ claimId }: { claimId: number }) {
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border bg-card">
+      {/* Phones: one card per order */}
+      <ul className="divide-y rounded-xl border bg-card md:hidden" aria-label="Orders in this claim">
+        {data.items.map((item) => {
+          const changed = item.current_status && item.current_status !== item.reason_status;
+          return (
+            <li key={item.order_id}>
+              <button
+                type="button"
+                onClick={() => setOpenOrder(item.order_id)}
+                className="flex w-full flex-col gap-1 px-4 py-3 text-left transition-colors duration-150 outline-none hover:bg-accent/40 focus-visible:bg-sidebar-accent"
+              >
+                <span className="flex items-baseline justify-between gap-3">
+                  <span className="money font-medium text-primary">{item.order_id}</span>
+                  <span className="money font-semibold text-loss">{formatINR(item.amount_paise)}</span>
+                </span>
+                <span className="text-sm">
+                  {STATUS_META[item.reason_status].label}
+                  {changed && item.current_status && (
+                    <span className="text-settled"> · now {STATUS_META[item.current_status].label.toLowerCase()}</span>
+                  )}
+                </span>
+                <span className="money text-xs text-muted-foreground">
+                  {item.channel} · expected {formatINR(item.expected_paise)} · got {formatINR(item.received_paise)}
+                  {item.age_days !== null && ` · ${item.age_days} d overdue`}
+                </span>
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
         <table className="w-full min-w-[52rem] text-sm">
           <thead className="sticky top-0 bg-muted/95">
             <tr className="text-left text-xs text-muted-foreground">

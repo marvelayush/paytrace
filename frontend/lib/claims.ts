@@ -64,12 +64,44 @@ export function useClaim(claimId: number) {
   });
 }
 
+type StatusChange = { status: ClaimStatus; reference?: string };
+type Snapshot = { detail?: ClaimDetail; list?: ClaimSummary[] };
+
+/**
+ * Optimistic: the new status shows at once in the detail and the list. If the API refuses
+ * (e.g. someone else already moved the claim), both are put back and the error is shown.
+ */
 export function useChangeClaimStatus(claimId: number) {
   const queryClient = useQueryClient();
-  return useMutation<ClaimDetail, ApiError, { status: ClaimStatus; reference?: string }>({
+  return useMutation<ClaimDetail, ApiError, StatusChange, Snapshot>({
     mutationFn: (body) => apiFetch<ClaimDetail>(`/claims/${claimId}`, { method: "PATCH", body: JSON.stringify(body) }),
-    onSuccess: (detail) => {
-      queryClient.setQueryData(["claims", claimId], detail);
+    onMutate: async ({ status, reference }) => {
+      await queryClient.cancelQueries({ queryKey: ["claims"] });
+      const snapshot: Snapshot = {
+        detail: queryClient.getQueryData<ClaimDetail>(["claims", claimId]),
+        list: queryClient.getQueryData<ClaimSummary[]>(["claims"]),
+      };
+      const patch = (claim: ClaimSummary) => ({
+        ...claim,
+        status,
+        reference: status === "filed" ? reference || claim.reference : claim.reference,
+        updated_at: new Date().toISOString(),
+      });
+      if (snapshot.detail) queryClient.setQueryData<ClaimDetail>(["claims", claimId], { ...snapshot.detail, ...patch(snapshot.detail) });
+      if (snapshot.list) {
+        queryClient.setQueryData<ClaimSummary[]>(
+          ["claims"],
+          snapshot.list.map((claim) => (claim.id === claimId ? patch(claim) : claim)),
+        );
+      }
+      return snapshot;
+    },
+    onError: (_error, _body, snapshot) => {
+      if (snapshot?.detail) queryClient.setQueryData(["claims", claimId], snapshot.detail);
+      if (snapshot?.list) queryClient.setQueryData(["claims"], snapshot.list);
+    },
+    onSuccess: (detail) => queryClient.setQueryData(["claims", claimId], detail),
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["claims"], exact: true });
       queryClient.invalidateQueries({ queryKey: ["dashboard"] });
     },

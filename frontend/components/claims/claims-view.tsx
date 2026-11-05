@@ -1,15 +1,19 @@
 "use client";
 
-import { ChevronRight, FileCheck2 } from "lucide-react";
+import { ChevronRight, FileCheck2, LoaderCircle, RefreshCw } from "lucide-react";
 import Link from "next/link";
 import { useMemo, useState } from "react";
+import { toast } from "sonner";
 
+import { StaggerItem, StaggerList } from "@/components/motion";
 import { EmptyState, ErrorState, PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
+import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { canEdit, useCurrentUser } from "@/lib/auth";
 import { CLAIM_STATUS_META, type ClaimStatus, type ClaimSummary, useClaims } from "@/lib/claims";
-import { formatCount, formatINR, formatINRCompact } from "@/lib/format";
-import { STATUS_META } from "@/lib/recon";
+import { formatCount, formatDuration, formatINR, formatINRCompact } from "@/lib/format";
+import { STATUS_META, useRunReconciliation } from "@/lib/recon";
 import { cn } from "@/lib/utils";
 
 const ORDER: ClaimStatus[] = ["open", "filed", "recovered", "rejected"];
@@ -59,10 +63,10 @@ function StatusTabs({
 function ClaimRow({ claim }: { claim: ClaimSummary }) {
   const reasons = Object.entries(claim.by_reason).sort((a, b) => (b[1]?.amount_paise ?? 0) - (a[1]?.amount_paise ?? 0));
   return (
-    <li>
+    <StaggerItem>
       <Link
         href={`/claims/${claim.id}`}
-        className="flex flex-col gap-3 px-4 py-4 outline-none hover:bg-accent/40 focus-visible:bg-sidebar-accent sm:flex-row sm:items-center sm:gap-6"
+        className="group flex flex-col gap-3 px-4 py-4 transition-colors duration-150 outline-none hover:bg-accent/40 focus-visible:bg-sidebar-accent sm:flex-row sm:items-center sm:gap-6"
       >
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -90,15 +94,17 @@ function ClaimRow({ claim }: { claim: ClaimSummary }) {
               {claim.oldest_age_days ? ` · oldest ${claim.oldest_age_days} d overdue` : ""}
             </p>
           </div>
-          <ChevronRight className="size-4 shrink-0 text-muted-foreground" aria-hidden />
+          <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform duration-150 group-hover:translate-x-0.5" aria-hidden />
         </div>
       </Link>
-    </li>
+    </StaggerItem>
   );
 }
 
 export function ClaimsView() {
   const claims = useClaims();
+  const { data: user } = useCurrentUser();
+  const run = useRunReconciliation();
   const [active, setActive] = useState<ClaimStatus | "all">("all");
   const visible = useMemo(
     () => (claims.data ?? []).filter((claim) => active === "all" || claim.status === active),
@@ -112,18 +118,57 @@ export function ClaimsView() {
         description="Short, late and overcharged amounts, grouped by the partner who owes them, with evidence ready to send."
       />
       {claims.isPending ? (
-        <div className="space-y-4">
+        <div className="space-y-6" aria-busy aria-label="Loading claims">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {ORDER.map((status) => (
-              <Skeleton key={status} className="h-24 rounded-xl" />
+              <div key={status} className="space-y-2 rounded-xl border bg-card px-4 py-3">
+                <Skeleton className="h-3.5 w-16" />
+                <Skeleton className="h-6 w-20" />
+                <Skeleton className="h-3 w-28" />
+              </div>
             ))}
           </div>
-          <Skeleton className="h-64 w-full rounded-xl" />
+          <div className="divide-y rounded-xl border bg-card">
+            {Array.from({ length: 5 }, (_, index) => (
+              <div key={index} className="flex items-center gap-6 px-4 py-4">
+                <div className="flex-1 space-y-2">
+                  <Skeleton className="h-4 w-48" />
+                  <Skeleton className="h-5 w-72 max-w-full" />
+                </div>
+                <div className="space-y-1.5">
+                  <Skeleton className="ml-auto h-4 w-24" />
+                  <Skeleton className="h-3 w-32" />
+                </div>
+              </div>
+            ))}
+          </div>
         </div>
       ) : claims.error ? (
         <ErrorState title="Couldn't load claims" message={claims.error.message} onRetry={() => claims.refetch()} />
       ) : claims.data.length === 0 ? (
-        <EmptyState icon={FileCheck2} title="No claims">
+        <EmptyState
+          icon={FileCheck2}
+          title="No claims yet"
+          action={
+            canEdit(user) ? (
+              <Button
+                size="sm"
+                disabled={run.isPending}
+                onClick={() => {
+                  const pending = toast.loading("Reconciling every order…");
+                  run.mutate(undefined, {
+                    onSuccess: (summary) =>
+                      toast.success(`Reconciled ${formatCount(summary.order_count)} orders in ${formatDuration(summary.duration_ms)}`, { id: pending }),
+                    onError: (error) => toast.error(error.message, { id: pending }),
+                  });
+                }}
+              >
+                {run.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
+                Run reconciliation
+              </Button>
+            ) : undefined
+          }
+        >
           Claims open automatically when reconciliation finds orders that were short paid, unpaid past due, overcharged on
           freight or returned but never received.
         </EmptyState>
@@ -135,11 +180,11 @@ export function ClaimsView() {
               No {active === "all" ? "" : CLAIM_STATUS_META[active].label.toLowerCase()} claims.
             </p>
           ) : (
-            <ul className="divide-y overflow-hidden rounded-xl border bg-card">
+            <StaggerList key={active} className="divide-y overflow-hidden rounded-xl border bg-card">
               {visible.map((claim) => (
                 <ClaimRow key={claim.id} claim={claim} />
               ))}
-            </ul>
+            </StaggerList>
           )}
         </div>
       )}
