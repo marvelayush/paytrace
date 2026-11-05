@@ -76,3 +76,21 @@ One entry per milestone: what was built, what works, and assumptions added.
 - `deployment.md`: exact steps for Neon, seeding from your machine, Render, Vercel; demo accounts; the direct vs proxy cookie trade-off; a post-deploy checklist. README rewritten. `.env.example` lists every variable (names only).
 - Secret scan: no keys or passwords tracked; `.env` and `frontend/.env.local` are ignored.
 - Tests: 287 pass (5 new config/header/CORS tests), plus the slow 1-lakh test.
+
+## Milestone 10b — Real Gemini column mapping (tested with a live API key)
+- **First run failed silently:** `gemini-2.5-flash` answers 404 "no longer available to new users", so every suggestion fell back to fuzzy matching. The fallback worked as designed (the user saw "AI unavailable, showing best guesses"), but the AI was never used. Fixed: the model is configurable, defaulting to `gemini-3.1-flash-lite` with a low thinking level. Thought parts in the reply are skipped, and one retry is made on 500/503 overload but not on 429 quota.
+- **Evaluation** (`scripts/eval_ai_mapping.py`): every sample layout is treated as new (as when a partner changes format) and scored against the known-correct mapping. Two deliberately hard layouts were added: a settlement report with cryptic headers (`Amt1`, `Chg`, `Tax A`, `Tax B`, `Amt2`) and a COD file with decoys (an `Order Value` column beside `Collected`, and a `Batch Date` column holding week codes).
+
+| Model | Files | Fields right | Time per file | Notes |
+|---|---|---|---|---|
+| gemini-3.1-flash-lite (default) | 18 sample + 2 hard | **194 / 194** | median 2.6 s, min 2.0 s, max 3.5 s (one 18 s outlier: a timeout, then a successful retry) | confidence 0.80–1.00 |
+| gemini-3.5-flash | 10 that got through | 108 / 108 | 3.3–11.6 s | free tier: 20 requests/day, then 429 |
+| fuzzy fallback | 18 sample + 2 hard | 190 / 194 | 0.1–1.2 s | misses on the cryptic layout |
+
+- **What the AI got wrong, and how it was caught.** Before the prompt fix, flash-lite mapped `Tax A` → TCS and `Tax B` → TDS (swapped) at confidence **0.70**. The review threshold is "below 0.7", and both columns hold valid amounts, so neither the confidence rule nor cell validation flagged it. It would have gone through. Two fixes followed:
+  1. Rule-based plausibility checks on the 20 preview rows (`services/mapping_checks.py`, A40): TCS smaller than TDS → both fields flagged with "'Tax A' is about 0.50% of gross, 'Tax B' about 0.10%… may be swapped". Gross − deductions ≠ net in at least half the rows → net flagged. Re-run: the swap was flagged on both fields and could not be approved without confirming. No false alarms on the 6 genuine settlement layouts.
+  2. The prompt now states that TCS (~0.5%) is larger than TDS (~0.1%). The model then mapped the cryptic layout correctly (0.80 confidence, reason: "Tax B is larger than Tax A, consistent with TCS being larger than TDS").
+- **Fuzzy fallback on the hard layout** mapped Order ID to `Ref`, a partner reference shaped like an order ID, at 0.90 confidence, and left TCS and Reference unmapped. Net was flagged (required field missing). That `Ref` pick is not caught by any check. The user would see the wrong IDs in the preview, and reconciliation would show those lines as unmatched. Accepted: fuzzy is only the fallback, and its notice tells the user to check every field.
+- **End to end through the API** (`POST /uploads/inspect` with the format-changed Marketplace 1 file, real key): review screen with `engine=llm`, 9/9 fields at confidence 1.0 with reasons, 0 preview errors, **2.8 s** for the request. Approve saved v2. Processing read 6,476 rows, all recognised as already stored (0 double-counted), in 0.3 s. Then rolled back to v1 to keep the demo state.
+- **No PII sent:** unchanged. Only headers and 5 masked rows go out (existing test). The key travels in a header and is never logged.
+- Tests: 295 backend tests pass (8 new: overload retry, no retry on quota, thought parts and thinking level, five plausibility-check cases).
