@@ -51,6 +51,9 @@ class Settings(BaseSettings):
     return_receipt_days: int = 7
 
     login_max_attempts: int = 5
+    # Proxies in front of the API that append to X-Forwarded-For (Render = 1; Vercel proxy + Render = 2).
+    # 0 uses the socket address. Used only to tell login attempts from different people apart.
+    forwarded_hops: int = Field(default=0, ge=0, le=5)
     login_window_seconds: int = 60
 
     gemini_api_key: str | None = None

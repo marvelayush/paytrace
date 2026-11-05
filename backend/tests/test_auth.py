@@ -103,3 +103,22 @@ def test_successful_login_resets_the_failure_count(client, finance_user):
     assert login(client, finance_user.email).status_code == 200
     for _ in range(max_attempts - 1):
         assert login(client, finance_user.email, "wrong").status_code == 401
+
+
+def _request_from(socket_host: str, forwarded_for: str | None):
+    from starlette.requests import Request
+
+    headers = [(b"x-forwarded-for", forwarded_for.encode())] if forwarded_for else []
+    return Request({"type": "http", "headers": headers, "client": (socket_host, 1234)})
+
+
+def test_client_ip_behind_trusted_proxies():
+    from app.routers.auth import client_ip
+
+    # Vercel proxy + Render: the client is two entries from the right; a forged left entry is ignored.
+    request = _request_from("10.0.0.1", "6.6.6.6, 203.0.113.7, 76.76.21.1")
+    assert client_ip(request, 2) == "203.0.113.7"
+    assert client_ip(request, 1) == "76.76.21.1"
+    # No trusted proxies, or fewer entries than expected: the socket address.
+    assert client_ip(request, 0) == "10.0.0.1"
+    assert client_ip(_request_from("10.0.0.1", None), 2) == "10.0.0.1"

@@ -19,9 +19,21 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 WRONG_CREDENTIALS = "Email or password is incorrect."
 
 
+def client_ip(request: Request, forwarded_hops: int) -> str:
+    """The caller's IP. Behind proxies, every request arrives from the proxy, so read X-Forwarded-For.
+
+    Each trusted proxy appends the address it saw, so the client is `forwarded_hops` entries from the
+    right. Entries further left were written by the client and could be forged, so they are ignored.
+    """
+    if forwarded_hops:
+        entries = [entry.strip() for entry in request.headers.get("x-forwarded-for", "").split(",") if entry.strip()]
+        if len(entries) >= forwarded_hops:
+            return entries[-forwarded_hops]
+    return request.client.host if request.client else "unknown"
+
+
 def _limiter_key(request: Request, email: str) -> str:
-    client_ip = request.client.host if request.client else "unknown"
-    return f"{client_ip}|{email.lower()}"
+    return f"{client_ip(request, get_settings().forwarded_hops)}|{email.lower()}"
 
 
 @router.post("/login", response_model=UserOut)
