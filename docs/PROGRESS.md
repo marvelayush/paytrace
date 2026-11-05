@@ -94,3 +94,36 @@ One entry per milestone: what was built, what works, and assumptions added.
 - **End to end through the API** (`POST /uploads/inspect` with the format-changed Marketplace 1 file, real key): review screen with `engine=llm`, 9/9 fields at confidence 1.0 with reasons, 0 preview errors, **2.8 s** for the request. Approve saved v2. Processing read 6,476 rows, all recognised as already stored (0 double-counted), in 0.3 s. Then rolled back to v1 to keep the demo state.
 - **No PII sent:** unchanged. Only headers and 5 masked rows go out (existing test). The key travels in a header and is never logged.
 - Tests: 295 backend tests pass (8 new: overload retry, no retry on quota, thought parts and thinking level, five plausibility-check cases).
+
+## Milestone 10c — Deployment defaults: proxy mode
+- **Proxy mode is now the deployment default.** The browser talks only to Vercel, which forwards `/api/*` to Render. The session cookie is first-party (`SameSite=Lax`), so sign-in works in Safari and on phones. `render.yaml` presets `COOKIE_SAMESITE=lax` and `FORWARDED_HOPS=2`. `deployment.md` gives the Vercel variables (`NEXT_PUBLIC_API_URL=/api`, `BACKEND_URL`), states the about 4.5 MB upload limit through the proxy, and explains how a shared domain removes it. The browser refuses files over 4 MB with a clear message (`NEXT_PUBLIC_MAX_UPLOAD_MB` overrides it).
+- `deployment.md`: the repository must be public, and reviewers open the backend `/health` first because Render's free plan sleeps.
+- **Fixed: login rate limit behind proxies.** It keyed on the socket address, which behind Render is the load balancer for everyone, so five wrong passwords from anyone would have locked a demo account for every reviewer. It now reads the client IP from `X-Forwarded-For`, counting trusted hops from the right (test added).
+- Verified locally with a production build in proxy mode: login sets a first-party `SameSite=lax` cookie, and every screen loads through `/api` with no direct calls to the API origin. (Lesson for Windows: Git Bash rewrites `NEXT_PUBLIC_API_URL=/api` into a Windows path at build time. Build from PowerShell or set `MSYS_NO_PATHCONV=1`. Vercel is unaffected.)
+
+## Milestone 11 — Premium frontend polish
+- **Motion** (`motion`, LazyMotion, OS reduce-motion respected): pages fade in on navigation; the drawer slides in, becoming a bottom sheet on phones; dialogs, menus and selects fade and scale in 150 ms; claim rows and the waterfall's bars stagger in once; KPI numbers count up; matrix cells fade in with a slight stagger.
+- **Skeletons shaped like each screen** (KPI cards, matrix grid, table columns, drawer waterfall, claim rows) instead of spinners.
+- **Optimistic updates with rollback:** claim status changes, mapping approve and rollback, each with a short toast ("Claim #3 marked filed", "Mapping v3 approved for …", "Mapping v1 is active again") and an error toast that restores the previous state.
+- **Command palette (Ctrl/Cmd+K):** jump to any screen, live order search by ID or AWB (opens the order), each partner's claim, run reconciliation (finance only), switch theme, shortcuts, sign out.
+- **Orders table:** status chips with live counts (`status_counts`, a new additive API field) and one-click clear; filters and the open order in the URL; breadcrumb back to the dashboard cell; ↑/↓, Home/End, Enter, Esc and `/` shortcuts with a `?` sheet; memoised virtual rows in pages of 500; details prefetched on focus.
+- **Order drawer:** "Where every rupee went" as a waterfall: value, then commission, fees and freight, then TCS and TDS shown as credits that are never deducted, then expected vs received and the difference (red only for a shortfall beyond ₹10).
+- **Upload:** real upload progress (XHR), then Parsing → Mapping → Matching → Done with the machine time (review time excluded); a smoother drop zone. Mapping review keeps AI reasons in tooltips (as text on phones) and a sticky approve bar above the phone navigation.
+- **Visual:** one indigo accent; red, amber and green only for meaning; soft shadows only on floating surfaces; polished focus, hover, cursor and disabled states; an elegant dark mode with a toggle (sidebar, account menu, palette), saved per browser and applied before first paint.
+- **Phones (375 px):** bottom navigation; orders, claim items, upload history and reports as card lists; drawers as bottom sheets; controls at least 44 px tall on touch screens.
+- **Empty states with one action:** no claims → Run reconciliation; no orders or dashboard → Upload partner reports (finance), explanation only (co-founder).
+
+### Quality checks (production build, proxy mode)
+| Page | Preset | Performance | Accessibility | Best practices | LCP | TBT | CLS |
+|---|---|---|---|---|---|---|---|
+| Dashboard | Desktop | **100** | **100** | **100** | 0.8 s | 0 ms | 0 |
+| Orders | Desktop | **99** | **100** | **100** | 0.9 s | 10 ms | 0.018 |
+| Dashboard | Mobile (4× CPU, slow 4G) | 79 | **100** | **100** | 4.1 s | 330 ms | 0 |
+| Orders | Mobile (4× CPU, slow 4G) | 77 | **100** | **100** | 4.4 s | 340 ms | 0.003 |
+
+- **Mobile performance misses the 90 target.** 88% of mobile LCP is render delay: every screen is rendered in the browser after a session check (Decision 11), so on a throttled phone the chain is JS start-up, then `/auth/me`, then the data. Already done: the first screen no longer fades in, overlays load on demand, data loads in parallel with the session check, and about 30 route prefetches were removed (78 → 79 / 75 → 77, run-to-run variance ±3). The real fix is server-rendering the first screen. That is now possible because proxy mode makes the cookie first-party to the Next.js server. It is a larger change, deliberately not taken in a polish pass.
+- Accessibility went from 93 to 100. Fixed: `aria-label` on generic elements (loading regions are now `role="status"`); the loss red raised from red-600 to red-700 (4.36:1 → about 6:1 on its pill); grey text on the heat tint; accessible names that did not contain the visible text.
+- **Scrolling 30,000 orders** (headless Chrome, unthrottled, 8 s continuous scroll): median frame 7.0 ms, p99 9.5 ms (60 fps needs under 16.7 ms), 1 frame over 33 ms; at most 32 rows in the DOM.
+- **Every screen as both roles, light and dark, at 375 px and 1440 px** (52 screenshots, headless Chrome): no sideways scrolling, no console errors. Found and fixed during this check: screen-reader-only labels escaped their scroll containers and widened the page on phones (mobile Chrome zoomed out, hiding the bottom bar); the sticky drawer header covered the close button; "Search or jump to…" wrapped in the sidebar.
+- In a real browser: matrix cell → filtered orders with breadcrumb; keyboard ↓↓ Enter opens the third order; Ctrl+K "88120" → the brief's order (₹899 / ₹862 / −₹37); the format-changed upload goes through Parsing → Mapping (matches saved v2) → approve v3 → Done; rollback to v1 is shown at once with its toast.
+- Frontend lint and production build clean; 296 backend tests pass.

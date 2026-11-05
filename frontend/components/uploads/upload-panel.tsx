@@ -146,7 +146,7 @@ function ResultCard({
         </span>
         <div className="min-w-0 flex-1">
           <h2 className="text-sm font-semibold">
-            {failed ? "This file could not be processed" : `Done in ${formatDuration(totalMs)}`}
+            {failed ? "This file could not be processed" : `Done in ${formatDuration(totalMs)} of processing`}
           </h2>
           <p className="truncate text-sm text-muted-foreground">
             {upload.filename} · {upload.partner_name} {FILE_KIND_LABELS[upload.file_kind].toLowerCase()}
@@ -197,7 +197,8 @@ export function UploadPanel({ sources, onShowErrors }: { sources: Source[]; onSh
   const [sourceId, setSourceId] = useState<string>("");
   const [stage, setStage] = useState<Stage>({ name: "choose" });
   const [fileError, setFileError] = useState<string | null>(null);
-  const startedAt = useRef(0);
+  // Machine time only: uploading and parsing, then processing. Time spent reviewing the mapping is not counted.
+  const inspectMs = useRef(0);
   const inspect = useInspect();
   const process = useProcess();
 
@@ -206,14 +207,20 @@ export function UploadPanel({ sources, onShowErrors }: { sources: Source[]; onSh
 
   function runProcess(token: string, mapping: Pick<Mapping, "id" | "version">, filename: string) {
     setStage({ name: "processing", filename, version: mapping.version });
+    const processStarted = performance.now();
     process.mutate(
       { token, mappingId: mapping.id },
       {
         onSuccess: (result) => {
-          const totalMs = Math.round(performance.now() - startedAt.current);
+          const totalMs = Math.round(inspectMs.current + performance.now() - processStarted);
           setStage({ name: "done", result, totalMs });
-          if (result.upload.status === "done") {
-            toast.success(`${result.upload.filename}: ${formatCount(result.upload.rows_ok)} rows saved in ${formatDuration(totalMs)}`);
+          const { upload } = result;
+          if (upload.status === "done") {
+            toast.success(
+              upload.rows_ok === 0 && upload.rows_duplicate > 0
+                ? `${upload.filename}: nothing new, all ${formatCount(upload.rows_duplicate)} rows were already uploaded`
+                : `${upload.filename}: ${formatCount(upload.rows_ok)} rows saved in ${formatDuration(totalMs)}`,
+            );
           } else {
             toast.error(`${result.upload.filename} could not be processed`);
           }
@@ -230,7 +237,7 @@ export function UploadPanel({ sources, onShowErrors }: { sources: Source[]; onSh
     const problem = checkFile(file);
     setFileError(problem);
     if (problem || !selected) return;
-    startedAt.current = performance.now();
+    const inspectStarted = performance.now();
     setStage({ name: "inspecting", filename: file.name, sent: 0 });
     inspect.mutate(
       {
@@ -240,6 +247,7 @@ export function UploadPanel({ sources, onShowErrors }: { sources: Source[]; onSh
       },
       {
         onSuccess: (inspection) => {
+          inspectMs.current = performance.now() - inspectStarted;
           if (inspection.decision === "reuse" && inspection.active_mapping) {
             toast.message(`Using saved mapping v${inspection.active_mapping.version}`);
             runProcess(inspection.token, inspection.active_mapping, inspection.filename);
