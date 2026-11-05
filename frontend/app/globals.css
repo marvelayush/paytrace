@@ -2,8 +2,8 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Dark styles only apply under a .dark class (never set: PayTrace ships light only),
-   instead of following the OS setting, which would half-darken components. */
+/* Dark styles apply under a .dark class on <html>, set from the viewer's saved choice (lib/theme.tsx),
+   never straight from the OS setting, which would half-darken components before the app decides. */
 @custom-variant dark (&:is(.dark *));
 
 /*
@@ -56,6 +56,11 @@
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) * 1.4);
   --radius-2xl: calc(var(--radius) * 1.8);
+
+  /* Shadows only on floating surfaces (drawer, palette, popovers, toasts). Everything else uses hairline borders. */
+  --shadow-float: var(--float-shadow);
+
+  --ease-out-soft: cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 :root {
@@ -97,6 +102,52 @@
   --sidebar-border: oklch(0.92 0.004 286.3);
   --sidebar-accent: oklch(0.962 0.018 272.3);     /* indigo-50: active nav item */
   --sidebar-accent-foreground: oklch(0.398 0.195 277.4); /* indigo-800 */
+
+  --float-shadow: 0 12px 32px -12px oklch(0.21 0.006 285.9 / 0.16), 0 2px 6px -2px oklch(0.21 0.006 285.9 / 0.08);
+  color-scheme: light;
+}
+
+/*
+ * Dark theme: the same restraint. Zinc surfaces stepping up in lightness (page < card < popover),
+ * hairline borders as translucent white, the indigo accent lifted to indigo-400 so it keeps AA contrast
+ * both as text on the page and behind dark button text. Semantic colours are the 400 shades.
+ */
+.dark {
+  --background: oklch(0.155 0.004 286);
+  --foreground: oklch(0.965 0.002 286);
+  --card: oklch(0.185 0.005 286);
+  --card-foreground: oklch(0.965 0.002 286);
+  --popover: oklch(0.215 0.006 286);
+  --popover-foreground: oklch(0.965 0.002 286);
+  --secondary: oklch(0.255 0.006 286);
+  --secondary-foreground: oklch(0.965 0.002 286);
+  --muted: oklch(0.235 0.006 286);
+  --muted-foreground: oklch(0.72 0.012 286);
+  --accent: oklch(0.245 0.006 286);
+  --accent-foreground: oklch(0.965 0.002 286);
+  --border: oklch(1 0 0 / 0.085);
+  --input: oklch(1 0 0 / 0.15);
+
+  --primary: oklch(0.715 0.155 277);
+  --primary-foreground: oklch(0.18 0.03 277);
+  --ring: oklch(0.715 0.155 277);
+
+  --destructive: oklch(0.704 0.191 22.2);
+  --loss: oklch(0.72 0.18 22.2);
+  --loss-soft: oklch(0.72 0.18 22.2 / 0.12);
+  --attention: oklch(0.83 0.16 84.4);
+  --attention-soft: oklch(0.83 0.16 84.4 / 0.1);
+  --settled: oklch(0.79 0.17 151.7);
+  --settled-soft: oklch(0.79 0.17 151.7 / 0.1);
+
+  --sidebar: oklch(0.17 0.005 286);
+  --sidebar-foreground: oklch(0.8 0.01 286);
+  --sidebar-border: oklch(1 0 0 / 0.07);
+  --sidebar-accent: oklch(0.715 0.155 277 / 0.14);
+  --sidebar-accent-foreground: oklch(0.86 0.07 277);
+
+  --float-shadow: 0 16px 40px -12px oklch(0 0 0 / 0.6), 0 2px 8px -2px oklch(0 0 0 / 0.4);
+  color-scheme: dark;
 }
 
 @layer base {
@@ -111,8 +162,52 @@
     @apply bg-background text-foreground antialiased;
   }
   button:not(:disabled),
-  [role="button"]:not(:disabled) {
+  [role="button"]:not(:disabled),
+  [role="row"][tabindex],
+  [role="tab"]:not([aria-disabled="true"]),
+  [role="option"],
+  [role="menuitem"] {
     cursor: pointer;
+  }
+  button:disabled,
+  [aria-disabled="true"] {
+    cursor: not-allowed;
+  }
+  /* While the theme switches, no element animates its colours (avoids a half-transitioned frame). */
+  html.theme-switching *,
+  html.theme-switching *::before,
+  html.theme-switching *::after {
+    transition: none !important;
+  }
+  ::selection {
+    background-color: color-mix(in oklch, var(--primary) 22%, transparent);
+  }
+}
+
+/* Touch screens: every control is at least 44px tall (WCAG 2.5.5 target size). */
+@media (pointer: coarse) {
+  [data-slot="button"],
+  [data-slot="select-trigger"],
+  [data-slot="input"],
+  [data-slot="tabs-trigger"],
+  [data-slot="dropdown-menu-item"],
+  [data-slot="select-item"] {
+    min-height: 44px;
+  }
+  [data-slot="button"][data-size^="icon"] {
+    min-width: 44px;
+  }
+}
+
+/* Respect the OS "reduce motion" setting everywhere, including CSS animations from tw-animate. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 1ms !important;
+    scroll-behavior: auto !important;
   }
 }
 

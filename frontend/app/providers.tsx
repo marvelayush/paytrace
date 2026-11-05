@@ -3,9 +3,11 @@
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useState } from "react";
 
+import { MotionProvider } from "@/components/motion";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ApiError } from "@/lib/api";
+import { useTheme } from "@/lib/theme";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -23,12 +25,15 @@ function makeQueryClient() {
 
 export function Providers({ children }: { children: React.ReactNode }) {
   const [queryClient] = useState(makeQueryClient);
+  const theme = useTheme();
   return (
     <QueryClientProvider client={queryClient}>
-      <TooltipProvider delayDuration={300}>
-        {children}
-        <Toaster position="bottom-right" closeButton />
-      </TooltipProvider>
+      <MotionProvider>
+        <TooltipProvider delayDuration={300}>
+          {children}
+          <Toaster position="bottom-right" theme={theme} closeButton />
+        </TooltipProvider>
+      </MotionProvider>
     </QueryClientProvider>
   );
 }
