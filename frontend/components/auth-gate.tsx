@@ -54,7 +54,8 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
     <div className="min-h-dvh lg:pl-60" aria-busy={isPending || signedOut} aria-label="Loading">
       <aside className="fixed inset-y-0 left-0 hidden w-60 border-r bg-sidebar p-4 lg:block">
         <BrandMark />
-        <div className="mt-8 space-y-2">
+        <Skeleton className="mt-6 h-9 w-full rounded-lg" />
+        <div className="mt-4 space-y-2">
           <Skeleton className="h-8 w-full" />
           <Skeleton className="h-8 w-4/5" />
           <Skeleton className="h-8 w-3/5" />
@@ -66,7 +67,17 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
       <div className="mx-auto max-w-7xl space-y-4 px-4 py-6 sm:px-6 lg:px-8 lg:py-8">
         <Skeleton className="h-7 w-48" />
         <Skeleton className="h-4 w-72 max-w-full" />
-        <Skeleton className="mt-6 h-64 w-full" />
+        <div className="grid gap-3 pt-2 sm:grid-cols-2 xl:grid-cols-4">
+          {Array.from({ length: 4 }, (_, index) => (
+            <Skeleton key={index} className="h-28 rounded-xl" />
+          ))}
+        </div>
+        <Skeleton className="h-72 w-full rounded-xl" />
+      </div>
+      <div className="fixed inset-x-0 bottom-0 flex h-14 items-center justify-around border-t bg-card lg:hidden" aria-hidden>
+        {Array.from({ length: 5 }, (_, index) => (
+          <Skeleton key={index} className="size-6 rounded-md" />
+        ))}
       </div>
     </div>
   );

@@ -53,8 +53,8 @@ export type ClaimItem = {
 
 export type ClaimDetail = ClaimSummary & { items: ClaimItem[] };
 
-export function useClaims() {
-  return useQuery<ClaimSummary[], ApiError>({ queryKey: ["claims"], queryFn: () => apiFetch<ClaimSummary[]>("/claims") });
+export function useClaims({ enabled = true }: { enabled?: boolean } = {}) {
+  return useQuery<ClaimSummary[], ApiError>({ queryKey: ["claims"], queryFn: () => apiFetch<ClaimSummary[]>("/claims"), enabled });
 }
 
 export function useClaim(claimId: number) {
