@@ -18,14 +18,17 @@ export function PageHeader({
   );
 }
 
+/** An empty screen or section: what is missing, why, and (at most) one helpful action. */
 export function EmptyState({
   icon: Icon,
   title,
   children,
+  action,
 }: {
   icon: React.ComponentType<{ className?: string }>;
   title: string;
   children?: React.ReactNode;
+  action?: React.ReactNode;
 }) {
   return (
     <div className="flex flex-col items-center rounded-xl border border-dashed bg-card px-6 py-14 text-center">
@@ -34,6 +37,7 @@ export function EmptyState({
       </span>
       <h2 className="mt-4 text-sm font-semibold">{title}</h2>
       {children && <div className="mt-1.5 max-w-md text-sm text-muted-foreground">{children}</div>}
+      {action && <div className="mt-5">{action}</div>}
     </div>
   );
 }
@@ -55,7 +59,7 @@ export function ErrorState({
         <button
           type="button"
           onClick={onRetry}
-          className="mt-4 rounded-lg border bg-card px-3 py-1.5 text-sm font-medium outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
+          className="mt-4 min-h-9 rounded-lg border bg-card px-3 py-1.5 text-sm font-medium transition-colors duration-150 outline-none hover:bg-accent focus-visible:ring-3 focus-visible:ring-ring/50"
         >
           Try again
         </button>

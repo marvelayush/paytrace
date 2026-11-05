@@ -1,7 +1,9 @@
 "use client";
 
 import { FileText } from "lucide-react";
+import { m } from "motion/react";
 
+import { EASE_OUT } from "@/components/motion";
 import { ErrorState } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { Badge } from "@/components/ui/badge";
@@ -9,6 +11,7 @@ import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatDate, formatDateTime, formatINR, formatSignedINR, formatWeight } from "@/lib/format";
 import { explainStatus, FLAGGED, type OrderDetail, STATUS_META, useOrderDetail } from "@/lib/recon";
+import { useIsMobile } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
 
 const DELIVERY_LABEL: Record<string, string> = {
@@ -19,63 +22,167 @@ const DELIVERY_LABEL: Record<string, string> = {
   cancelled: "Cancelled",
 };
 
-function Line({ label, amount, sign, muted, strong }: { label: string; amount: number; sign?: "+" | "−"; muted?: boolean; strong?: boolean }) {
-  return (
-    <div className={cn("flex items-baseline justify-between gap-4 py-1 text-sm", muted && "text-muted-foreground", strong && "font-semibold")}>
-      <dt>{label}</dt>
-      <dd className="money whitespace-nowrap">
-        {sign && amount !== 0 ? `${sign} ` : ""}
-        {formatINR(Math.abs(amount))}
-      </dd>
-    </div>
-  );
+const SHORTFALL_PAISE = -1000; // the brief's ₹10 tolerance
+
+// ---------- waterfall ----------
+
+type Step = {
+  label: string;
+  detail?: string;
+  kind: "total" | "deduct" | "tax" | "received" | "difference";
+  from: number;
+  to: number;
+  amount: number;
+};
+
+/**
+ * Order value, minus each rate-card deduction, gives what the partner should pay (expected). TCS and TDS are
+ * shown in sequence but, being tax credits, never lower the expected amount (the engine's rule, A6).
+ */
+function buildSteps(detail: OrderDetail): Step[] {
+  const { breakdown, expected_paise, received_paise, diff_paise } = detail.result;
+  const fees = breakdown.fixed_fee + breakdown.gateway_fee + breakdown.cod_fee;
+  const feeParts = [
+    breakdown.fixed_fee ? `fixed ${formatINR(breakdown.fixed_fee)}` : null,
+    breakdown.gateway_fee ? `gateway ${formatINR(breakdown.gateway_fee)}` : null,
+    breakdown.cod_fee ? `COD ${formatINR(breakdown.cod_fee)}` : null,
+  ];
+  const freight = breakdown.forward_freight + breakdown.return_freight;
+  const freightParts = [
+    breakdown.forward_freight ? `forward ${formatINR(breakdown.forward_freight)}` : null,
+    breakdown.return_freight ? `return ${formatINR(breakdown.return_freight)}` : null,
+    breakdown.chargeable_weight_g ? formatWeight(breakdown.chargeable_weight_g) : null,
+  ];
+
+  const steps: Step[] = [{ label: "Order value", kind: "total", from: 0, to: breakdown.value, amount: breakdown.value }];
+  let running = breakdown.value;
+  const deductions: [string, number, (string | null)[]][] = [
+    ["Commission", breakdown.commission, []],
+    ["Fees", fees, feeParts],
+    ["Freight", freight, freightParts],
+  ];
+  for (const [label, amount, parts] of deductions) {
+    if (!amount) continue;
+    const detailText = parts.filter(Boolean).join(" · ");
+    steps.push({ label, detail: detailText || undefined, kind: "deduct", from: running, to: running - amount, amount: -amount });
+    running -= amount;
+  }
+  let taxEdge = running;
+  const taxes: [string, number][] = [
+    ["GST TCS", breakdown.tcs],
+    ["Income-tax TDS", breakdown.tds],
+  ];
+  for (const [label, amount] of taxes) {
+    if (!amount) continue;
+    steps.push({ label, detail: "tax credit, not deducted", kind: "tax", from: taxEdge, to: taxEdge - amount, amount: -amount });
+    taxEdge -= amount;
+  }
+  steps.push({ label: "Expected", detail: "from the rate card", kind: "total", from: 0, to: expected_paise, amount: expected_paise });
+  steps.push({ label: "Received", detail: "from partner files", kind: "received", from: 0, to: received_paise, amount: received_paise });
+  steps.push({ label: "Difference", kind: "difference", from: expected_paise, to: received_paise, amount: diff_paise });
+  return steps;
 }
 
-function Breakdown({ detail }: { detail: OrderDetail }) {
-  const { breakdown, evidence_summary: received, charged_freight_paise, tcs_paise, tds_paise } = detail.result;
-  const weight = breakdown.chargeable_weight_g ? ` (${formatWeight(breakdown.chargeable_weight_g)})` : "";
+const BAR_TONE: Record<Step["kind"], string> = {
+  total: "bg-foreground/70",
+  deduct: "bg-muted-foreground/40",
+  tax: "border border-dashed border-muted-foreground/60 bg-transparent",
+  received: "bg-primary",
+  difference: "bg-loss",
+};
+
+function amountText(step: Step): string {
+  if (step.kind === "deduct" || step.kind === "tax") return `− ${formatINR(-step.amount)}`;
+  if (step.kind === "difference") return formatSignedINR(step.amount);
+  return formatINR(step.amount);
+}
+
+/** "Where every rupee went": from order value to what should arrive, then what did. */
+function Waterfall({ detail }: { detail: OrderDetail }) {
+  const steps = buildSteps(detail);
+  const low = Math.min(0, ...steps.flatMap((step) => [step.from, step.to]));
+  const high = Math.max(1, ...steps.flatMap((step) => [step.from, step.to]));
+  const range = high - low;
+  const shortfall = detail.result.diff_paise < SHORTFALL_PAISE;
+  const { evidence_summary: received, charged_freight_paise, tcs_paise, tds_paise } = detail.result;
+  const nothingReceived = !received.settled_net && !received.cod_remitted && !charged_freight_paise;
+
   return (
     <section aria-labelledby="breakdown-heading" className="space-y-3">
       <h3 id="breakdown-heading" className="text-sm font-semibold">
         Where every rupee went
       </h3>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <dl className="rounded-lg border p-3">
-          <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Expected (rate card)</p>
-          <Line label="Order value" amount={breakdown.value} />
-          {breakdown.commission > 0 && <Line label="Commission" amount={breakdown.commission} sign="−" />}
-          {breakdown.fixed_fee > 0 && <Line label="Fixed fee" amount={breakdown.fixed_fee} sign="−" />}
-          {breakdown.gateway_fee > 0 && <Line label="Gateway fee" amount={breakdown.gateway_fee} sign="−" />}
-          {breakdown.cod_fee > 0 && <Line label="COD fee" amount={breakdown.cod_fee} sign="−" />}
-          {breakdown.forward_freight > 0 && <Line label={`Forward freight${weight}`} amount={breakdown.forward_freight} sign="−" />}
-          {breakdown.return_freight > 0 && <Line label="Return freight" amount={breakdown.return_freight} sign="−" />}
-          <div className="mt-1 border-t pt-1">
-            <Line label="Expected" amount={detail.result.expected_paise} sign={detail.result.expected_paise < 0 ? "−" : undefined} strong />
-          </div>
-        </dl>
-        <dl className="rounded-lg border p-3">
-          <p className="mb-1 text-xs font-medium tracking-wide text-muted-foreground uppercase">Received (partner files)</p>
-          <Line label="Settlement paid" amount={received.settled_net} sign={received.settled_net < 0 ? "−" : undefined} />
-          {tcs_paise > 0 && <Line label="TCS withheld, added back" amount={tcs_paise} sign="+" muted />}
-          {tds_paise > 0 && <Line label="TDS withheld, added back" amount={tds_paise} sign="+" muted />}
-          {received.cod_remitted > 0 && <Line label="COD remitted" amount={received.cod_remitted} sign="+" />}
-          {charged_freight_paise > 0 && <Line label="Freight charged" amount={charged_freight_paise} sign="−" />}
-          {received.charged_cod_fee > 0 && <Line label="COD fee charged" amount={received.charged_cod_fee} sign="−" />}
-          <div className="mt-1 border-t pt-1">
-            <Line label="Received" amount={detail.result.received_paise} sign={detail.result.received_paise < 0 ? "−" : undefined} strong />
-          </div>
-        </dl>
-      </div>
+      <ol className="rounded-lg border px-3 py-2">
+        {steps.map((step, index) => {
+          const left = ((Math.min(step.from, step.to) - low) / range) * 100;
+          const width = (Math.abs(step.to - step.from) / range) * 100;
+          const isDifference = step.kind === "difference";
+          const strong = step.kind === "total" || step.kind === "received" || isDifference;
+          return (
+            <li
+              key={step.label}
+              className={cn(
+                "grid grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)_auto] items-center gap-3 py-1.5",
+                (step.label === "Expected" || isDifference) && "mt-1 border-t pt-2.5",
+              )}
+            >
+              <div className="min-w-0">
+                <p className={cn("truncate text-sm", strong ? "font-medium" : "text-muted-foreground")}>{step.label}</p>
+                {step.detail && <p className="money truncate text-[11px] text-muted-foreground">{step.detail}</p>}
+              </div>
+              <div className="relative h-5" aria-hidden>
+                <span className="absolute inset-y-0 w-px bg-border" style={{ left: `${((0 - low) / range) * 100}%` }} />
+                <m.span
+                  className={cn(
+                    "absolute inset-y-0.5 origin-left rounded-[3px]",
+                    isDifference && !shortfall ? "bg-muted-foreground/40" : BAR_TONE[step.kind],
+                  )}
+                  style={{ left: `${left}%`, width: `max(${width}%, 2px)` }}
+                  initial={{ scaleX: 0, opacity: 0 }}
+                  animate={{ scaleX: 1, opacity: 1 }}
+                  transition={{ duration: 0.22, delay: index * 0.035, ease: EASE_OUT }}
+                />
+              </div>
+              <p
+                className={cn(
+                  "money text-right text-sm whitespace-nowrap",
+                  step.kind === "tax" && "text-muted-foreground",
+                  strong && "font-medium",
+                  isDifference && "font-semibold",
+                  isDifference && shortfall && "text-loss",
+                )}
+              >
+                {amountText(step)}
+              </p>
+            </li>
+          );
+        })}
+      </ol>
+
+      <dl className="rounded-lg bg-secondary/60 px-3 py-2 text-xs text-muted-foreground">
+        <dt className="mb-1 font-medium text-foreground">Received is made of</dt>
+        <dd className="money flex flex-wrap gap-x-3 gap-y-0.5">
+          {received.settled_net !== 0 && <span>settlements {formatSignedINR(received.settled_net)}</span>}
+          {received.cod_remitted > 0 && <span>COD remitted +{formatINR(received.cod_remitted)}</span>}
+          {charged_freight_paise > 0 && <span>freight charged −{formatINR(charged_freight_paise)}</span>}
+          {received.charged_cod_fee > 0 && <span>COD fee charged −{formatINR(received.charged_cod_fee)}</span>}
+          {tcs_paise + tds_paise > 0 && <span>TCS + TDS added back +{formatINR(tcs_paise + tds_paise)}</span>}
+          {nothingReceived && <span>nothing reported by any partner yet</span>}
+        </dd>
+      </dl>
+
       {(tcs_paise > 0 || tds_paise > 0) && (
         <p className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
           <Badge variant="secondary" className="font-normal">Tax, not leakage</Badge>
-          GST TCS {formatINR(tcs_paise)} and income-tax TDS {formatINR(tds_paise)} were withheld at source. They are claimable credits, so they are added
-          back and never count as a difference.
+          GST TCS {formatINR(tcs_paise)} and income-tax TDS {formatINR(tds_paise)} were withheld at source. They are claimable credits, so they
+          never count as a difference.
         </p>
       )}
     </section>
   );
 }
+
+// ---------- evidence and facts ----------
 
 function SourceTag({ file, row }: { file: string; row: number }) {
   return (
@@ -189,15 +296,46 @@ function Facts({ detail }: { detail: OrderDetail }) {
   );
 }
 
+function DrawerSkeleton() {
+  return (
+    <div className="space-y-6" aria-busy aria-label="Loading order">
+      <div className="grid grid-cols-3 gap-2">
+        {Array.from({ length: 3 }, (_, index) => (
+          <Skeleton key={index} className="h-14 rounded-lg" />
+        ))}
+      </div>
+      <Skeleton className="h-12 w-full rounded-lg" />
+      <div className="space-y-2.5">
+        <Skeleton className="h-4 w-40" />
+        {Array.from({ length: 7 }, (_, index) => (
+          <div key={index} className="grid grid-cols-[8.5rem_1fr_5rem] items-center gap-3">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-4" style={{ width: `${90 - index * 9}%` }} />
+            <Skeleton className="ml-auto h-3.5 w-16" />
+          </div>
+        ))}
+      </div>
+      <Skeleton className="h-28 w-full rounded-lg" />
+    </div>
+  );
+}
+
+// ---------- drawer ----------
+
 export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onClose: () => void }) {
   const detail = useOrderDetail(orderId);
   const data = detail.data;
+  const mobile = useIsMobile();
   const flagged = data ? FLAGGED.includes(data.result.status) : false;
 
   return (
     <Sheet open={orderId !== null} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="right" className="gap-0 overflow-y-auto p-0 data-[side=right]:w-full data-[side=right]:sm:max-w-xl">
-        <SheetHeader className="border-b px-5 py-4">
+      <SheetContent
+        side={mobile ? "bottom" : "right"}
+        className="gap-0 overflow-y-auto overscroll-contain p-0 data-[side=bottom]:max-h-[92dvh] data-[side=bottom]:rounded-t-2xl data-[side=right]:w-full data-[side=right]:sm:max-w-xl"
+      >
+        {mobile && <span aria-hidden className="mx-auto mt-2 block h-1 w-10 shrink-0 rounded-full bg-border" />}
+        <SheetHeader className="sticky top-0 z-10 border-b bg-popover/95 px-5 py-4 backdrop-blur">
           <div className="flex flex-wrap items-center gap-2 pr-8">
             <SheetTitle className="money text-base">{orderId}</SheetTitle>
             {data && <StatusPill {...STATUS_META[data.result.status]} />}
@@ -210,14 +348,8 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
           </SheetDescription>
         </SheetHeader>
 
-        <div className="space-y-6 px-5 py-5">
-          {detail.isPending && (
-            <div className="space-y-3" aria-busy>
-              <Skeleton className="h-20 w-full" />
-              <Skeleton className="h-48 w-full" />
-              <Skeleton className="h-32 w-full" />
-            </div>
-          )}
+        <div className="space-y-6 px-5 py-5 pb-[calc(1.25rem+env(safe-area-inset-bottom))]">
+          {detail.isPending && orderId !== null && <DrawerSkeleton />}
           {detail.error && <ErrorState title="Couldn't load this order" message={detail.error.message} onRetry={() => detail.refetch()} />}
           {data && (
             <>
@@ -225,7 +357,7 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
                 {[
                   ["Expected", formatINR(data.result.expected_paise), ""],
                   ["Received", formatINR(data.result.received_paise), ""],
-                  ["Difference", formatSignedINR(data.result.diff_paise), data.result.diff_paise < -1000 ? "text-loss" : ""],
+                  ["Difference", formatSignedINR(data.result.diff_paise), data.result.diff_paise < SHORTFALL_PAISE ? "text-loss" : ""],
                 ].map(([label, value, tone]) => (
                   <div key={label} className="rounded-lg border px-3 py-2">
                     <p className="text-xs text-muted-foreground">{label}</p>
@@ -234,19 +366,16 @@ export function OrderDrawer({ orderId, onClose }: { orderId: string | null; onCl
                 ))}
               </div>
 
-              <div
-                className={cn(
-                  "rounded-lg px-3 py-2.5 text-sm",
-                  flagged ? "bg-loss-soft text-foreground" : "bg-secondary text-foreground",
-                )}
-              >
+              <div className={cn("rounded-lg px-3 py-2.5 text-sm", flagged ? "bg-loss-soft text-foreground" : "bg-secondary text-foreground")}>
                 {flagged && (
-                  <p className="money mb-0.5 font-semibold text-loss">At risk: {formatINR(data.result.at_risk_paise)} · owed by {data.result.partner_name}</p>
+                  <p className="money mb-0.5 font-semibold text-loss">
+                    At risk: {formatINR(data.result.at_risk_paise)} · owed by {data.result.partner_name}
+                  </p>
                 )}
                 <p>{explainStatus(data, formatINR, formatDate)}</p>
               </div>
 
-              <Breakdown detail={data} />
+              <Waterfall detail={data} />
               <Evidence detail={data} />
               <Facts detail={data} />
             </>

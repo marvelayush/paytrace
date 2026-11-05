@@ -50,6 +50,8 @@ export type OrdersPage = {
   items: OrderRow[];
   total: number;
   totals: { expected_paise: number; received_paise: number; diff_paise: number; at_risk_paise: number };
+  /** Orders per status under the other filters (ignoring the status filter). First page only. */
+  status_counts: Partial<Record<ReconStatus, number>> | null;
   offset: number;
   limit: number;
 };
@@ -159,7 +161,8 @@ export type RunSummary = {
   finished_at: string | null;
 };
 
-const PAGE_SIZE = 200;
+// Large pages keep deep scrolling through 30,000 orders to a few dozen requests.
+const PAGE_SIZE = 500;
 
 function ordersQuery(filters: OrderFilters, offset: number): string {
   const params = new URLSearchParams({ offset: String(offset), limit: String(PAGE_SIZE) });
