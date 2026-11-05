@@ -57,7 +57,7 @@ function buildSteps(detail: OrderDetail): Step[] {
   // A returned order's sale is reversed, so it starts from nothing; say so rather than show "Order value ₹0".
   const isReturned = detail.order.delivery_status === "returned" || detail.order.delivery_status === "rto";
   const first: Step = isReturned && breakdown.value === 0 && detail.order.value_paise > 0
-    ? { label: "Sale", detail: `${formatINR(detail.order.value_paise)} reversed on return`, kind: "total", from: 0, to: 0, amount: 0 }
+    ? { label: "Sale", detail: `${formatINR(detail.order.value_paise)} reversed`, kind: "total", from: 0, to: 0, amount: 0 }
     : { label: "Order value", kind: "total", from: 0, to: breakdown.value, amount: breakdown.value };
   const steps: Step[] = [first];
   let running = breakdown.value;
