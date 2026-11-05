@@ -51,6 +51,8 @@ export type PreviewField = {
   confidence: number | null;
   reason: string | null;
   error_count: number;
+  /** Rule-based plausibility warning (e.g. TCS and TDS look swapped). */
+  warning: string | null;
   needs_confirmation: boolean;
 };
 

@@ -43,6 +43,7 @@ class PreviewField(BaseModel):
     confidence: float | None
     reason: str | None
     error_count: int
+    warning: str | None = None  # plausibility check, e.g. TCS and TDS look swapped
     needs_confirmation: bool
 
 

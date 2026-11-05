@@ -16,6 +16,7 @@ from app.services.audit import record_audit
 from app.services.canonical import CANONICAL_FIELDS, ONE_OF_REQUIRED
 from app.services.fingerprint import header_fingerprint
 from app.services.mapping_ai import LOW_CONFIDENCE, MappingSuggestion
+from app.services.mapping_checks import plausibility_warnings
 from app.services.parsing import ROW_NUMBER, apply_mapping
 from app.services.pii import mask_address, mask_name, mask_phone
 
@@ -44,6 +45,7 @@ def build_preview(
     parsed = apply_mapping(sample, file_kind, columns)
     typed = parsed.all_rows if parsed.all_rows is not None else parsed.rows
     rejected_reasons = dict(parsed.rejected)
+    warnings = plausibility_warnings(file_kind, typed, columns)
 
     fields = []
     for spec in CANONICAL_FIELDS[file_kind]:
@@ -55,8 +57,12 @@ def build_preview(
         reason = suggested.reason if suggested and suggested.source_column == column else None
         one_of = ONE_OF_REQUIRED.get(file_kind, ())
         missing_required = spec.required and not column
+        warning = warnings.get(spec.name) if column else None
         needs_confirmation = bool(
-            missing_required or errors or (column and confidence is not None and confidence < LOW_CONFIDENCE)
+            missing_required
+            or errors
+            or warning
+            or (column and confidence is not None and confidence < LOW_CONFIDENCE)
         )
         fields.append({
             "name": spec.name,
@@ -70,6 +76,7 @@ def build_preview(
             "confidence": confidence,
             "reason": reason,
             "error_count": len(errors),
+            "warning": warning,
             "needs_confirmation": needs_confirmation,
         })
 

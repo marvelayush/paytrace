@@ -133,12 +133,12 @@ export function MappingReview({
 
   const needsLook = fields.filter((field) => {
     const lowConfidence = field.source_column && field.confidence !== null && field.confidence < 0.7;
-    return field.error_count > 0 || (field.required && !field.source_column) || lowConfidence;
+    return field.error_count > 0 || Boolean(field.warning) || (field.required && !field.source_column) || lowConfidence;
   });
   const unresolved = needsLook.filter(
     (field) =>
       (field.required && !field.source_column) ||
-      (!confirmed.has(field.name) && !(touched.has(field.name) && field.error_count === 0)),
+      (!confirmed.has(field.name) && !(touched.has(field.name) && field.error_count === 0 && !field.warning)),
   );
   const missingOneOf = fields.find(
     (field) => field.one_of_group && !field.one_of_group.some((name) => columns[name]),
@@ -236,6 +236,12 @@ export function MappingReview({
                   {field.error_count > 0 && (
                     <p className="text-xs text-loss">
                       {field.error_count} of {preview.rows_checked} preview rows don&apos;t parse as {field.type.replace("_", " ")}.
+                    </p>
+                  )}
+                  {field.warning && (
+                    <p className="flex items-start gap-1.5 text-xs text-attention">
+                      <TriangleAlert className="mt-px size-3.5 shrink-0" aria-hidden />
+                      {field.warning}
                     </p>
                   )}
                   {field.required && !field.source_column && (
