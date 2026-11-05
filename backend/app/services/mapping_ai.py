@@ -38,6 +38,7 @@ logger = logging.getLogger(__name__)
 SAMPLE_ROWS_FOR_AI = 5
 LOW_CONFIDENCE = 0.7
 AI_UNAVAILABLE = "AI unavailable, showing best guesses"
+RETRY_STATUSES = {500, 503}  # overloaded; not 429 (quota), which a retry cannot fix
 
 
 class FieldSuggestion(BaseModel):
@@ -195,6 +196,8 @@ def build_prompt(file_kind: str, headers: list[str], masked_rows: list[dict[str,
         f"Fields:\n{field_lines}\n\n"
         f"Columns in the file (use these names exactly): {json.dumps(headers, ensure_ascii=False)}\n\n"
         f"First rows (personal data masked): {json.dumps(masked_rows, ensure_ascii=False, default=str)}\n\n"
+        "Amounts may be in rupees with commas. On Indian marketplace settlements GST TCS is usually about 0.5% "
+        "and income-tax TDS about 0.1% of the sale, so TCS is the larger of the two.\n"
         "For every field give the single best source column, or null if the file has none. "
         "Confidence is 0 to 1: use below 0.7 when unsure. Reason: at most 20 words, based on the header and the values."
     )
@@ -210,9 +213,12 @@ class LLMSuggester:
         timeout_seconds: float = 15.0,
         fallback: MappingSuggester | None = None,
         client: httpx.Client | None = None,
+        thinking_level: str | None = None,
     ) -> None:
         self.api_key = api_key
         self.model = model
+        # Gemini 3 models think before answering; "low" keeps a mapping answer to a couple of seconds.
+        self.thinking_level = thinking_level
         self.fallback = fallback or FuzzySuggester()
         self.client = client or httpx.Client(timeout=timeout_seconds)
 
@@ -229,19 +235,24 @@ class LLMSuggester:
     def _ask_model(self, file_kind: str, headers: list[str], rows: list[dict[str, str | None]]) -> MappingSuggestion:
         specs = CANONICAL_FIELDS[file_kind]
         masked = mask_sample_rows(headers, rows[:SAMPLE_ROWS_FOR_AI])
+        generation_config: dict = {
+            "temperature": 0,
+            "responseMimeType": "application/json",
+            "responseSchema": _response_schema(specs),
+        }
+        if self.thinking_level:
+            generation_config["thinkingConfig"] = {"thinkingLevel": self.thinking_level}
         body = {
             "contents": [{"role": "user", "parts": [{"text": build_prompt(file_kind, headers, masked)}]}],
-            "generationConfig": {
-                "temperature": 0,
-                "responseMimeType": "application/json",
-                "responseSchema": _response_schema(specs),
-            },
+            "generationConfig": generation_config,
         }
         url = f"https://generativelanguage.googleapis.com/v1beta/models/{self.model}:generateContent"
         response = self.client.post(url, json=body, headers={"x-goog-api-key": self.api_key})
+        if response.status_code in RETRY_STATUSES:
+            # Gemini answers 503 "high demand" in bursts; one immediate retry usually succeeds.
+            response = self.client.post(url, json=body, headers={"x-goog-api-key": self.api_key})
         response.raise_for_status()
-        text = response.json()["candidates"][0]["content"]["parts"][0]["text"]
-        raw = json.loads(text)
+        raw = json.loads(_answer_text(response.json()))
 
         header_lookup = {header.strip().lower(): header for header in headers}
         fields: dict[str, FieldSuggestion] = {}
@@ -258,10 +269,19 @@ class LLMSuggester:
         return MappingSuggestion(engine="llm", fields=fields)
 
 
-def get_suggester(api_key: str | None, model: str) -> MappingSuggester:
+def _answer_text(reply: dict) -> str:
+    """The answer text of a Gemini reply, skipping any "thought" parts that thinking models may include."""
+    parts = reply["candidates"][0]["content"]["parts"]
+    text = "".join(part.get("text", "") for part in parts if not part.get("thought"))
+    if not text.strip():
+        raise ValueError("model returned no answer text")
+    return text
+
+
+def get_suggester(api_key: str | None, model: str, thinking_level: str | None = None) -> MappingSuggester:
     """Gemini when a key is configured, otherwise fuzzy matching (with a notice so the UI can say so)."""
     if api_key:
-        return LLMSuggester(api_key=api_key, model=model)
+        return LLMSuggester(api_key=api_key, model=model, thinking_level=thinking_level)
     return _NoKeySuggester()
 
 

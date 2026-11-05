@@ -27,7 +27,7 @@ INSPECT_ROWS = 200  # enough to detect date formats and fill the 20-row preview
 
 def get_mapping_suggester() -> MappingSuggester:
     settings = get_settings()
-    return get_suggester(settings.gemini_api_key, settings.gemini_model)
+    return get_suggester(settings.gemini_api_key, settings.gemini_model, settings.gemini_thinking_level or None)
 
 
 def _saved_suggestion(mapping: ColumnMapping, file_kind: str) -> MappingSuggestion:

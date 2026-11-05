@@ -125,3 +125,40 @@ def test_without_api_key_fuzzy_is_used_and_says_so():
     headers, rows = _file(FORMAT_CHANGED)
     suggestion = get_suggester(None, "any").suggest("settlement", headers, rows)
     assert (suggestion.engine, suggestion.notice) == ("fuzzy", AI_UNAVAILABLE)
+
+
+def test_one_retry_when_gemini_is_overloaded():
+    headers, rows = _file(FORMAT_CHANGED)
+    replies = [httpx.Response(503, json={"error": {"message": "high demand"}}), httpx.Response(200, json=_gemini_reply(_good_answer(FORMAT_CHANGED)))]
+    suggestion = _llm(lambda request: replies.pop(0)).suggest("settlement", headers, rows)
+    assert suggestion.engine == "llm"
+    assert suggestion.columns() == FORMAT_CHANGED.mapping()["columns"]
+
+
+def test_quota_exhausted_falls_back_without_retrying():
+    headers, rows = _file(FORMAT_CHANGED)
+    calls: list[int] = []
+
+    def quota(request: httpx.Request) -> httpx.Response:
+        calls.append(1)
+        return httpx.Response(429, json={"error": {"message": "quota"}})
+
+    suggestion = _llm(quota).suggest("settlement", headers, rows)
+    assert (suggestion.engine, suggestion.notice, len(calls)) == ("fuzzy", AI_UNAVAILABLE, 1)
+
+
+def test_thought_parts_are_skipped_and_thinking_level_is_sent():
+    headers, rows = _file(FORMAT_CHANGED)
+    sent: list[dict] = []
+
+    def reply(request: httpx.Request) -> httpx.Response:
+        sent.append(json.loads(request.content))
+        answer = _gemini_reply(_good_answer(FORMAT_CHANGED))
+        answer["candidates"][0]["content"]["parts"].insert(0, {"text": "thinking...", "thought": True})
+        return httpx.Response(200, json=answer)
+
+    suggester = LLMSuggester(
+        api_key="test-key", model="test-model", thinking_level="low", client=httpx.Client(transport=httpx.MockTransport(reply))
+    )
+    assert suggester.suggest("settlement", headers, rows).engine == "llm"
+    assert sent[0]["generationConfig"]["thinkingConfig"] == {"thinkingLevel": "low"}

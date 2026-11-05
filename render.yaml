@@ -27,7 +27,9 @@ services:
       - key: GEMINI_API_KEY
         sync: false # optional: without it, mapping suggestions use fuzzy matching
       - key: GEMINI_MODEL
-        value: gemini-2.5-flash
+        value: gemini-3.1-flash-lite # gemini-2.5-flash no longer serves new API keys
+      - key: GEMINI_THINKING_LEVEL
+        value: low
       - key: ENABLE_DOCS
         value: "false"
       - key: UPLOAD_DIR

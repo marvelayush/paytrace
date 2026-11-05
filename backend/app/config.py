@@ -54,7 +54,10 @@ class Settings(BaseSettings):
     login_window_seconds: int = 60
 
     gemini_api_key: str | None = None
-    gemini_model: str = "gemini-2.5-flash"
+    # gemini-2.5-flash is closed to new API keys (404). flash-lite: as accurate on our layouts, faster, larger free quota.
+    gemini_model: str = "gemini-3.1-flash-lite"
+    # Empty for models without a thinking setting.
+    gemini_thinking_level: str | None = "low"
 
 
 @lru_cache
