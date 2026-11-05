@@ -79,3 +79,17 @@ def test_awb_only_freight_lines_are_shown_as_evidence(founder_client, reconciled
 
 def test_unknown_order_is_404(founder_client, reconciled):
     assert founder_client.get("/recon/orders/NOPE-1").status_code == 404
+
+
+def test_status_counts_ignore_the_status_filter_and_follow_the_others(founder_client, reconciled):
+    everything = founder_client.get("/recon/orders?limit=1").json()
+    assert sum(everything["status_counts"].values()) == everything["total"] == 1_200
+
+    short = founder_client.get("/recon/orders?status=short_paid&limit=1").json()
+    assert short["status_counts"] == everything["status_counts"]  # chips keep showing every status
+    assert short["total"] == everything["status_counts"]["short_paid"]
+
+    bucket = founder_client.get("/recon/orders?age_bucket=16-30&limit=1").json()
+    assert sum(bucket["status_counts"].values()) == bucket["total"]
+
+    assert founder_client.get("/recon/orders?offset=1&limit=1").json()["status_counts"] is None

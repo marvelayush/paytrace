@@ -1,6 +1,6 @@
 """Reading reconciliation results: filtered order lists and the full evidence for one order."""
 
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from sqlalchemy import and_, case, func, literal, or_, select
 from sqlalchemy.orm import Session, aliased
@@ -100,11 +100,24 @@ def list_orders(db: Session, filters: OrderFilters, sort: str, offset: int, limi
         .where(*_conditions(filters))
     )
     count, expected, received, difference, at_risk = db.execute(totals_query).one()
+
+    # Orders per status under the other filters (not the status one), for the status chips. First page only.
+    status_counts: dict[str, int] | None = None
+    if offset == 0:
+        counts_query = (
+            select(ReconResult.status, func.count())
+            .select_from(ReconResult)
+            .join(Order, Order.order_id == ReconResult.order_id)
+            .where(*_conditions(replace(filters, statuses=None)))
+            .group_by(ReconResult.status)
+        )
+        status_counts = {status: number for status, number in db.execute(counts_query).all()}
     return {
         "items": [_list_item(result, order, channel_name, partner_name) for result, order, channel_name, partner_name in rows],
         "total": count,
         # SUM of BIGINT comes back as numeric: convert so the JSON carries plain integers (paise).
         "totals": {"expected_paise": int(expected), "received_paise": int(received), "diff_paise": int(difference), "at_risk_paise": int(at_risk)},
+        "status_counts": status_counts,
         "offset": offset,
         "limit": limit,
     }
