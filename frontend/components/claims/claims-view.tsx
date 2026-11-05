@@ -118,7 +118,7 @@ export function ClaimsView() {
         description="Short, late and overcharged amounts, grouped by the partner who owes them, with evidence ready to send."
       />
       {claims.isPending ? (
-        <div className="space-y-6" aria-busy aria-label="Loading claims">
+        <div className="space-y-6" role="status" aria-busy aria-label="Loading claims">
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
             {ORDER.map((status) => (
               <div key={status} className="space-y-2 rounded-xl border bg-card px-4 py-3">

@@ -122,7 +122,7 @@ function Waterfall({ detail }: { detail: OrderDetail }) {
             <li
               key={step.label}
               className={cn(
-                "grid grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)_auto] items-center gap-3 py-1.5",
+                "grid grid-cols-[minmax(0,6.5rem)_minmax(0,1fr)_auto] items-center gap-2 py-1.5 sm:grid-cols-[minmax(0,8.5rem)_minmax(0,1fr)_auto] sm:gap-3",
                 (step.label === "Expected" || isDifference) && "mt-1 border-t pt-2.5",
               )}
             >
@@ -298,7 +298,7 @@ function Facts({ detail }: { detail: OrderDetail }) {
 
 function DrawerSkeleton() {
   return (
-    <div className="space-y-6" aria-busy aria-label="Loading order">
+    <div className="space-y-6" role="status" aria-busy aria-label="Loading order">
       <div className="grid grid-cols-3 gap-2">
         {Array.from({ length: 3 }, (_, index) => (
           <Skeleton key={index} className="h-14 rounded-lg" />

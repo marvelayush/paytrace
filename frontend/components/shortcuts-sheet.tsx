@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect } from "react";
-
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-import { closeOverlay, isTyping, openOverlay, useModKey, useOverlay } from "@/lib/ui-store";
+import { closeOverlay, useModKey, useOverlay } from "@/lib/ui-store";
 
 function Keys({ keys }: { keys: string[] }) {
   return (
@@ -23,18 +21,6 @@ function Keys({ keys }: { keys: string[] }) {
 export function ShortcutsSheet() {
   const open = useOverlay() === "shortcuts";
   const mod = useModKey();
-
-  // "?" opens this sheet from anywhere, except while typing in a field.
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if (event.key === "?" && !isTyping(event) && !event.metaKey && !event.ctrlKey) {
-        event.preventDefault();
-        openOverlay("shortcuts");
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
 
   const groups: { title: string; items: [string, string[]][] }[] = [
     {

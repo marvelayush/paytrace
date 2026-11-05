@@ -89,7 +89,7 @@
 
   /* Semantic */
   --destructive: oklch(0.577 0.245 27.3);         /* red-600 */
-  --loss: oklch(0.577 0.245 27.3);                /* red-600 */
+  --loss: oklch(0.505 0.213 27.5);                /* red-700: AA (about 6:1) even on the red-50 pill */
   --loss-soft: oklch(0.971 0.013 17.4);           /* red-50 */
   --attention: oklch(0.555 0.163 48.998);         /* amber-700, readable as text */
   --attention-soft: oklch(0.987 0.022 95.3);      /* amber-50 */

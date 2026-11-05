@@ -1,6 +1,7 @@
 "use client";
 
 import { domAnimation, LazyMotion, m, MotionConfig, type Variants } from "motion/react";
+import { useState } from "react";
 
 /**
  * Motion for PayTrace: short (150–250 ms), ease-out, and only where it explains a change
@@ -20,12 +21,21 @@ export function MotionProvider({ children }: { children: React.ReactNode }) {
   );
 }
 
-/** A screen arriving: fade in and rise 4px. */
+// The first screen after a full page load paints at once: fading it in from opacity 0 would delay
+// what the user sees and hide it from the browser's Largest Contentful Paint. Later navigations fade.
+let firstScreenShown = false;
+
+/** A screen arriving after in-app navigation: fade in and rise 4px. */
 export function PageTransition({ children, className }: { children: React.ReactNode; className?: string }) {
+  const [animate] = useState(() => {
+    const shouldAnimate = firstScreenShown;
+    firstScreenShown = true;
+    return shouldAnimate;
+  });
   return (
     <m.div
       className={className}
-      initial={{ opacity: 0, y: 4 }}
+      initial={animate ? { opacity: 0, y: 4 } : false}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.22, ease: EASE_OUT }}
     >

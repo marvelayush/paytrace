@@ -76,7 +76,7 @@ function Matrix({ data }: { data: Loaded }) {
         </h2>
         <p className="text-xs text-muted-foreground">Days since the money became due · click a cell to see its orders</p>
       </div>
-      <div className="overflow-x-auto">
+      <div className="relative overflow-x-auto">
         <table className="w-full min-w-[40rem] text-sm">
           <thead>
             <tr className="text-xs text-muted-foreground">
@@ -109,17 +109,22 @@ function Matrix({ data }: { data: Loaded }) {
                       {cell.orders ? (
                         <Link
                           href={ordersLink({ partner: String(row.partner_id), age: bucket, status: "flagged" })}
+                          prefetch={false}
                           title={label}
-                          aria-label={label}
                           style={tint(cell.at_risk_paise, max)}
                           className="money block rounded-md px-2 py-2 text-right outline-none transition-shadow duration-150 hover:ring-2 hover:ring-loss/40 focus-visible:ring-3 focus-visible:ring-ring/60"
                         >
+                          <span className="sr-only">
+                            {row.partner_name}, {bucket} days overdue:{" "}
+                          </span>
                           <span className="block font-medium">{formatINRCompact(cell.at_risk_paise)}</span>
-                          <span className="block text-xs text-muted-foreground">{formatCount(cell.orders)} orders</span>
+                          {/* Not the muted grey: on the heat tint it would fall below AA contrast. */}
+                          <span className="block text-xs text-foreground/75">{formatCount(cell.orders)} orders</span>
                         </Link>
                       ) : (
-                        <span className="block px-2 py-2 text-right text-muted-foreground/60" aria-label="Nothing at risk">
-                          —
+                        <span className="block px-2 py-2 text-right text-muted-foreground/60">
+                          <span aria-hidden>—</span>
+                          <span className="sr-only">Nothing at risk</span>
                         </span>
                       )}
                     </m.td>
@@ -128,6 +133,7 @@ function Matrix({ data }: { data: Loaded }) {
                 <td className="px-5 py-1.5 text-right">
                   <Link
                     href={ordersLink({ partner: String(row.partner_id), status: "flagged" })}
+                    prefetch={false}
                     className="money rounded font-semibold text-loss underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     {formatINR(row.at_risk_paise)}
@@ -170,6 +176,7 @@ function Reasons({ data }: { data: Loaded }) {
           <li key={row.status}>
             <Link
               href={ordersLink({ status: row.status })}
+              prefetch={false}
               className="group block rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               title={`${STATUS_META[row.status].label}: ${formatINR(row.at_risk_paise)} across ${row.orders} orders`}
             >
@@ -231,7 +238,7 @@ function TaxSummary({ data }: { data: Loaded }) {
 
 function DashboardSkeleton() {
   return (
-    <div aria-busy aria-label="Loading money at risk">
+    <div role="status" aria-busy aria-label="Loading money at risk">
       <PageHeader title="Money at risk" />
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         {Array.from({ length: 4 }, (_, index) => (
@@ -242,7 +249,7 @@ function DashboardSkeleton() {
           </div>
         ))}
       </div>
-      <div className="mt-6 overflow-hidden rounded-xl border bg-card">
+      <div className="relative mt-6 overflow-hidden rounded-xl border bg-card">
         <div className="border-b px-5 py-4">
           <Skeleton className="h-4 w-56" />
         </div>

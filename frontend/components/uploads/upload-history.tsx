@@ -141,7 +141,7 @@ export function UploadHistory({ onShowErrors }: { onShowErrors: (upload: Upload)
         </li>
       ))}
     </ul>
-    <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
+    <div className="relative hidden overflow-x-auto rounded-xl border bg-card md:block">
       <table className="w-full min-w-[56rem] text-sm">
         <thead className="bg-muted/50">
           <tr className="text-left text-xs font-medium text-muted-foreground">

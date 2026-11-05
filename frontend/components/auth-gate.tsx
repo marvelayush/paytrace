@@ -1,6 +1,7 @@
 "use client";
 
 import { CircleAlert, RefreshCw } from "lucide-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { usePathname, useRouter } from "next/navigation";
 import { useEffect } from "react";
 
@@ -9,6 +10,7 @@ import { BrandMark } from "@/components/brand";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCurrentUser } from "@/lib/auth";
+import { prefetchScreenData } from "@/lib/recon";
 
 /**
  * Every signed-in screen lives under this layout. It asks the API who is signed in;
@@ -19,6 +21,12 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { data: user, error, isPending, refetch, isRefetching } = useCurrentUser();
+  const queryClient = useQueryClient();
+
+  // Load the screen's data alongside the session check rather than after it (one round trip saved).
+  useEffect(() => {
+    prefetchScreenData(queryClient, window.location.pathname, window.location.search);
+  }, [queryClient]);
 
   const signedOut = error?.isUnauthorized === true;
 
@@ -51,7 +59,7 @@ export function AuthGate({ children }: { children: React.ReactNode }) {
 
   // Loading (or redirecting to login): a calm skeleton of the shell, no layout jump.
   return (
-    <div className="min-h-dvh lg:pl-60" aria-busy={isPending || signedOut} aria-label="Loading">
+    <div className="min-h-dvh lg:pl-60" role="status" aria-busy={isPending || signedOut} aria-label="Loading">
       <aside className="fixed inset-y-0 left-0 hidden w-60 border-r bg-sidebar p-4 lg:block">
         <BrandMark />
         <Skeleton className="mt-6 h-9 w-full rounded-lg" />

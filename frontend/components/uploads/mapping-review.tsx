@@ -313,7 +313,7 @@ export function MappingReview({
               {preview.rows_with_errors ? `${preview.rows_with_errors} rows would be rejected` : "Every row parses"}
             </span>
           </div>
-          <div className="overflow-x-auto rounded-xl border bg-card">
+          <div className="relative overflow-x-auto rounded-xl border bg-card">
             <table className="w-full min-w-max text-sm">
               <thead className="bg-muted/50">
                 <tr>

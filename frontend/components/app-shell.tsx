@@ -1,13 +1,13 @@
 "use client";
 
 import { ChevronsUpDown, Keyboard, LoaderCircle, LogOut, Moon, Search, Sun } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
+import { useEffect, useState } from "react";
 
 import { Brand } from "@/components/brand";
-import { CommandPalette } from "@/components/command-palette";
 import { PageTransition } from "@/components/motion";
-import { ShortcutsSheet } from "@/components/shortcuts-sheet";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -21,10 +21,32 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 import { ROLE_LABELS, type User, useLogout } from "@/lib/auth";
 import { isActive, navItemsFor } from "@/lib/nav";
 import { toggleTheme, useTheme } from "@/lib/theme";
-import { openOverlay, useModKey } from "@/lib/ui-store";
+import { closeOverlay, isTyping, openOverlay, useModKey, useOverlay } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
 
 const FOCUS = "outline-none focus-visible:ring-3 focus-visible:ring-ring/50";
+
+// Loaded the first time they are opened, so they never weigh on the first screen.
+const CommandPalette = dynamic(() => import("@/components/command-palette").then((module) => module.CommandPalette), { ssr: false });
+const ShortcutsSheet = dynamic(() => import("@/components/shortcuts-sheet").then((module) => module.ShortcutsSheet), { ssr: false });
+
+/** Ctrl/Cmd+K toggles the palette (even while typing); "?" opens the shortcuts, except in a text field. */
+function useGlobalShortcuts(paletteOpen: boolean) {
+  useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
+        event.preventDefault();
+        if (paletteOpen) closeOverlay();
+        else openOverlay("palette");
+      } else if (event.key === "?" && !isTyping(event) && !event.metaKey && !event.ctrlKey) {
+        event.preventDefault();
+        openOverlay("shortcuts");
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [paletteOpen]);
+}
 
 function initials(name: string): string {
   const parts = name.replace(/\(.*\)/, "").trim().split(/\s+/);
@@ -207,6 +229,11 @@ function ThemeButton() {
 
 export function AppShell({ user, children }: { user: User; children: React.ReactNode }) {
   const pathname = usePathname();
+  const overlay = useOverlay();
+  useGlobalShortcuts(overlay === "palette");
+  // Once opened, keep each overlay mounted so its close animation and state survive.
+  const [loaded, setLoaded] = useState({ palette: false, shortcuts: false });
+  if (overlay && !loaded[overlay]) setLoaded({ ...loaded, [overlay]: true });
 
   return (
     <div className="min-h-dvh lg:pl-60">
@@ -257,8 +284,8 @@ export function AppShell({ user, children }: { user: User; children: React.React
       </main>
 
       <BottomNav user={user} />
-      <CommandPalette user={user} />
-      <ShortcutsSheet />
+      {loaded.palette && <CommandPalette user={user} />}
+      {loaded.shortcuts && <ShortcutsSheet />}
     </div>
   );
 }

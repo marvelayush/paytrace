@@ -54,19 +54,6 @@ export function CommandPalette({ user }: { user: User }) {
   const run = useRunReconciliation();
   const logout = useLogout();
 
-  // Ctrl/Cmd+K anywhere toggles the palette (even while typing in a field).
-  useEffect(() => {
-    function onKey(event: KeyboardEvent) {
-      if ((event.metaKey || event.ctrlKey) && event.key.toLowerCase() === "k") {
-        event.preventDefault();
-        if (open) closeOverlay();
-        else openOverlay("palette");
-      }
-    }
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [open]);
-
   function setOpen(next: boolean) {
     if (!next) {
       closeOverlay();

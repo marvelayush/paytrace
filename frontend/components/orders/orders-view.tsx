@@ -4,11 +4,11 @@ import { useQueryClient } from "@tanstack/react-query";
 import { type ColumnDef, flexRender, getCoreRowModel, type Row, useReactTable } from "@tanstack/react-table";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { ChevronRight, LoaderCircle, Search, SearchX, Upload, X } from "lucide-react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from "react";
 
-import { OrderDrawer } from "@/components/orders/order-drawer";
 import { EmptyState, ErrorState, PageHeader } from "@/components/page-header";
 import { StatusPill } from "@/components/status-pill";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,9 @@ import { formatCount, formatDate, formatINR, formatINRCompact, formatSignedINR }
 import { usePartners } from "@/lib/rate-cards";
 import {
   AGE_BUCKETS,
+  filtersFromParams,
   FLAGGED,
   type OrderDetail,
-  type OrderFilters,
   type OrderRow,
   type ReconStatus,
   STATUS_META,
@@ -32,6 +32,9 @@ import {
 import { isTyping } from "@/lib/ui-store";
 import { useIsMobile } from "@/lib/use-media-query";
 import { cn } from "@/lib/utils";
+
+// The drawer's code loads after the table, so it never delays the first screen.
+const OrderDrawer = dynamic(() => import("@/components/orders/order-drawer").then((module) => module.OrderDrawer), { ssr: false });
 
 const ALL = "__all__";
 const ROW_HEIGHT = 56;
@@ -100,13 +103,7 @@ function useOrdersUrl() {
   const router = useRouter();
   const pathname = usePathname();
   const params = useSearchParams();
-  const filters: OrderFilters = {
-    partner: params.get("partner") ?? undefined,
-    status: params.get("status") ?? undefined,
-    age: params.get("age") ?? undefined,
-    q: params.get("q") ?? undefined,
-    sort: params.get("sort") ?? undefined,
-  };
+  const filters = filtersFromParams(params);
   const open = params.get("open");
   const from = params.get("from");
 
@@ -175,7 +172,7 @@ function StatusChips({
     <div
       role="group"
       aria-label="Filter by status"
-      className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
+      className="relative -mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:flex-wrap sm:px-0"
     >
       {chips.map((chip) => {
         const selected = (active ?? undefined) === chip.value;
@@ -311,7 +308,7 @@ const OrderLine = memo(function OrderLine({
 function TableSkeleton({ mobile }: { mobile: boolean }) {
   if (mobile) {
     return (
-      <div className="divide-y rounded-xl border bg-card" aria-busy aria-label="Loading orders">
+      <div className="divide-y rounded-xl border bg-card" role="status" aria-busy aria-label="Loading orders">
         {Array.from({ length: 7 }, (_, index) => (
           <div key={index} className="space-y-2 px-4 py-3">
             <div className="flex justify-between">
@@ -326,7 +323,7 @@ function TableSkeleton({ mobile }: { mobile: boolean }) {
     );
   }
   return (
-    <div className="overflow-hidden rounded-xl border bg-card" aria-busy aria-label="Loading orders">
+    <div className="overflow-hidden rounded-xl border bg-card" role="status" aria-busy aria-label="Loading orders">
       <div className={cn(GRID, "border-b bg-muted/60 px-4 py-3")}>
         {columns.map((column) => (
           <Skeleton key={column.id} className={cn("h-3 w-16", (column.meta as ColumnMeta | undefined)?.numeric && "ml-auto mr-3")} />

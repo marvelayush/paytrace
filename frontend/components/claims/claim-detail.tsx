@@ -248,7 +248,7 @@ export function ClaimDetailView({ claimId }: { claimId: number }) {
         })}
       </ul>
 
-      <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
+      <div className="relative hidden overflow-x-auto rounded-xl border bg-card md:block">
         <table className="w-full min-w-[52rem] text-sm">
           <thead className="sticky top-0 bg-muted/95">
             <tr className="text-left text-xs text-muted-foreground">

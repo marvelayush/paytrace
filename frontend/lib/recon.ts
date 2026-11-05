@@ -174,14 +174,40 @@ function ordersQuery(filters: OrderFilters, offset: number): string {
   return `/recon/orders?${params}`;
 }
 
-export function useOrders(filters: OrderFilters) {
-  return useInfiniteQuery<OrdersPage, ApiError>({
+/** Filters as the orders screen reads them from its URL. */
+export function filtersFromParams(params: URLSearchParams): OrderFilters {
+  return {
+    partner: params.get("partner") ?? undefined,
+    status: params.get("status") ?? undefined,
+    age: params.get("age") ?? undefined,
+    q: params.get("q") ?? undefined,
+    sort: params.get("sort") ?? undefined,
+  };
+}
+
+function ordersQueryOptions(filters: OrderFilters) {
+  return {
     queryKey: ["recon", "orders", filters],
-    queryFn: ({ pageParam }) => apiFetch<OrdersPage>(ordersQuery(filters, pageParam as number)),
+    queryFn: ({ pageParam }: { pageParam: unknown }) => apiFetch<OrdersPage>(ordersQuery(filters, pageParam as number)),
     initialPageParam: 0,
-    getNextPageParam: (last) => (last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined),
-    placeholderData: keepPreviousData,
-  });
+    getNextPageParam: (last: OrdersPage) => (last.offset + last.items.length < last.total ? last.offset + last.items.length : undefined),
+  };
+}
+
+export function useOrders(filters: OrderFilters) {
+  return useInfiniteQuery<OrdersPage, ApiError>({ ...ordersQueryOptions(filters), placeholderData: keepPreviousData });
+}
+
+/**
+ * Start loading a screen's main data while the session check is still in flight, instead of after it.
+ * A signed-out visitor just gets a 401 here, which is ignored.
+ */
+export function prefetchScreenData(queryClient: ReturnType<typeof useQueryClient>, pathname: string, search: string): void {
+  if (pathname === "/") {
+    void queryClient.prefetchQuery({ queryKey: ["dashboard"], queryFn: () => apiFetch("/dashboard") });
+  } else if (pathname === "/orders") {
+    void queryClient.prefetchInfiniteQuery(ordersQueryOptions(filtersFromParams(new URLSearchParams(search))));
+  }
 }
 
 export function useOrderDetail(orderId: string | null) {
