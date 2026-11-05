@@ -126,4 +126,4 @@ One entry per milestone: what was built, what works, and assumptions added.
 - **Scrolling 30,000 orders** (headless Chrome, unthrottled, 8 s continuous scroll): median frame 7.0 ms, p99 9.5 ms (60 fps needs under 16.7 ms), 1 frame over 33 ms; at most 32 rows in the DOM.
 - **Every screen as both roles, light and dark, at 375 px and 1440 px** (52 screenshots, headless Chrome): no sideways scrolling, no console errors. Found and fixed during this check: screen-reader-only labels escaped their scroll containers and widened the page on phones (mobile Chrome zoomed out, hiding the bottom bar); the sticky drawer header covered the close button; "Search or jump to…" wrapped in the sidebar.
 - In a real browser: matrix cell → filtered orders with breadcrumb; keyboard ↓↓ Enter opens the third order; Ctrl+K "88120" → the brief's order (₹899 / ₹862 / −₹37); the format-changed upload goes through Parsing → Mapping (matches saved v2) → approve v3 → Done; rollback to v1 is shown at once with its toast.
-- Frontend lint and production build clean; 296 backend tests pass.
+- Frontend lint and production build clean; 297 backend tests pass (plus the slow 1-lakh test).
