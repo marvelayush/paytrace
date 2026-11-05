@@ -12,7 +12,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { canEdit, useCurrentUser } from "@/lib/auth";
 import { CLAIM_STATUS_META, type ClaimStatus, type ClaimSummary, useClaims } from "@/lib/claims";
-import { formatCount, formatDuration, formatINR, formatINRCompact } from "@/lib/format";
+import { formatCount, formatDuration, formatINR, formatINRCompact, plural } from "@/lib/format";
 import { STATUS_META, useRunReconciliation } from "@/lib/recon";
 import { cn } from "@/lib/utils";
 
@@ -90,7 +90,7 @@ function ClaimRow({ claim }: { claim: ClaimSummary }) {
           <div className="text-left sm:text-right">
             <p className={cn("money text-base font-semibold", claim.status === "open" && "text-loss")}>{formatINR(claim.total_paise)}</p>
             <p className="text-xs text-muted-foreground">
-              {formatCount(claim.item_count)} orders
+              {formatCount(claim.item_count)} {plural(claim.item_count, "order")}
               {claim.oldest_age_days ? ` · oldest ${claim.oldest_age_days} d overdue` : ""}
             </p>
           </div>

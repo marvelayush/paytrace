@@ -17,7 +17,7 @@ import { Select, SelectContent, SelectItem, SelectSeparator, SelectTrigger, Sele
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiFetch } from "@/lib/api";
 import { canEdit, useCurrentUser } from "@/lib/auth";
-import { formatCount, formatDate, formatINR, formatINRCompact, formatSignedINR } from "@/lib/format";
+import { formatCount, formatDate, formatINR, formatINRCompact, formatSignedINR, plural } from "@/lib/format";
 import { usePartners } from "@/lib/rate-cards";
 import {
   AGE_BUCKETS,
@@ -568,7 +568,7 @@ export function OrdersView() {
       <p className="mb-3 flex h-5 items-center text-sm text-muted-foreground" aria-live="polite">
         {first && (
           <>
-            <span className="money font-medium text-foreground">{formatCount(first.total)}</span>&nbsp;orders
+            <span className="money font-medium text-foreground">{formatCount(first.total)}</span>&nbsp;{plural(first.total, "order")}
             {first.totals.at_risk_paise > 0 && (
               <>
                 &nbsp;·&nbsp;<span className="money font-medium text-loss">{formatINRCompact(first.totals.at_risk_paise)}</span>&nbsp;at risk

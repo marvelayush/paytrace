@@ -13,7 +13,7 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { canEdit, useCurrentUser } from "@/lib/auth";
 import { type DashboardData, useDashboard } from "@/lib/dashboard";
-import { formatCount, formatDate, formatDateTime, formatDuration, formatINR, formatINRCompact } from "@/lib/format";
+import { formatCount, formatDate, formatDateTime, formatDuration, formatINR, formatINRCompact, plural } from "@/lib/format";
 import { AGE_BUCKETS, FLAGGED, STATUS_META, useRunReconciliation } from "@/lib/recon";
 import { cn } from "@/lib/utils";
 
@@ -97,7 +97,7 @@ function Matrix({ data }: { data: Loaded }) {
                 </th>
                 {AGE_BUCKETS.map((bucket, bucketIndex) => {
                   const cell = row.buckets[bucket];
-                  const label = `${row.partner_name}, ${bucket} days overdue: ${formatINR(cell.at_risk_paise)} across ${cell.orders} orders`;
+                  const label = `${row.partner_name}, ${bucket} days overdue: ${formatINR(cell.at_risk_paise)} across ${cell.orders} ${plural(cell.orders, "order")}`;
                   return (
                     <m.td
                       key={bucket}
@@ -119,7 +119,7 @@ function Matrix({ data }: { data: Loaded }) {
                           </span>
                           <span className="block font-medium">{formatINRCompact(cell.at_risk_paise)}</span>
                           {/* Not the muted grey: on the heat tint it would fall below AA contrast. */}
-                          <span className="block text-xs text-foreground/75">{formatCount(cell.orders)} orders</span>
+                          <span className="block text-xs text-foreground/75">{formatCount(cell.orders)} {plural(cell.orders, "order")}</span>
                         </Link>
                       ) : (
                         <span className="block px-2 py-2 text-right text-muted-foreground/60">
@@ -178,7 +178,7 @@ function Reasons({ data }: { data: Loaded }) {
               href={ordersLink({ status: row.status })}
               prefetch={false}
               className="group block rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
-              title={`${STATUS_META[row.status].label}: ${formatINR(row.at_risk_paise)} across ${row.orders} orders`}
+              title={`${STATUS_META[row.status].label}: ${formatINR(row.at_risk_paise)} across ${row.orders} ${plural(row.orders, "order")}`}
             >
               <span className="flex items-baseline justify-between gap-3 text-sm">
                 <span className="group-hover:underline">{STATUS_META[row.status].label}</span>
@@ -194,7 +194,7 @@ function Reasons({ data }: { data: Loaded }) {
                 />
               </span>
               <span className="mt-1 block text-xs text-muted-foreground">
-                {formatCount(row.orders)} orders · {STATUS_META[row.status].help.toLowerCase()}
+                {formatCount(row.orders)} {plural(row.orders, "order")} · {STATUS_META[row.status].help.toLowerCase()}
               </span>
             </Link>
           </li>
@@ -345,7 +345,7 @@ export function DashboardView() {
           label="Money at risk"
           value={kpis.money_at_risk_paise}
           format={formatINRCompact}
-          detail={`${formatCount(kpis.orders_at_risk)} orders short, unpaid, overcharged or lost`}
+          detail={`${formatCount(kpis.orders_at_risk)} ${plural(kpis.orders_at_risk, "order")} short, unpaid, overcharged or lost`}
           tone="loss"
         />
         <Kpi

@@ -49,6 +49,11 @@ export function formatCount(value: number): string {
   return countFormatter.format(value);
 }
 
+/** 1 → "order", 2 → "orders": the noun only, so the number can be styled separately. */
+export function plural(count: number, noun: string): string {
+  return count === 1 ? noun : `${noun}s`;
+}
+
 /** 2000 bp → "20.00%" */
 export function formatPercentBp(bp: number): string {
   return `${(bp / 100).toFixed(2)}%`;

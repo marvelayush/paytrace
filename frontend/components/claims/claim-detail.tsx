@@ -24,7 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { downloadFile } from "@/lib/api";
 import { canEdit, useCurrentUser } from "@/lib/auth";
 import { CLAIM_STATUS_META, type ClaimDetail, type ClaimStatus, NEXT_STATUSES, useChangeClaimStatus, useClaim } from "@/lib/claims";
-import { formatCount, formatDate, formatINR } from "@/lib/format";
+import { formatCount, formatDate, formatINR, plural } from "@/lib/format";
 import { STATUS_META } from "@/lib/recon";
 import { cn } from "@/lib/utils";
 
@@ -198,7 +198,7 @@ export function ClaimDetailView({ claimId }: { claimId: number }) {
           <p className="text-xs text-muted-foreground">Amount claimed</p>
           <p className={cn("money text-2xl font-semibold", data.status === "open" && "text-loss")}>{formatINR(data.total_paise)}</p>
           <p className="text-xs text-muted-foreground">
-            {formatCount(data.item_count)} orders{data.oldest_age_days ? ` · oldest ${data.oldest_age_days} days overdue` : ""}
+            {formatCount(data.item_count)} {plural(data.item_count, "order")}{data.oldest_age_days ? ` · oldest ${data.oldest_age_days} days overdue` : ""}
           </p>
         </div>
         <div className="rounded-xl border bg-card px-4 py-3 sm:col-span-2">
@@ -208,7 +208,7 @@ export function ClaimDetailView({ claimId }: { claimId: number }) {
               <li key={reason} className="flex items-baseline justify-between gap-4 text-sm">
                 <span>
                   {STATUS_META[reason as keyof typeof STATUS_META].label}
-                  <span className="text-muted-foreground"> · {formatCount(info?.count ?? 0)} orders</span>
+                  <span className="text-muted-foreground"> · {formatCount(info?.count ?? 0)} {plural(info?.count ?? 0, "order")}</span>
                 </span>
                 <span className="money font-medium">{formatINR(info?.amount_paise ?? 0)}</span>
               </li>
