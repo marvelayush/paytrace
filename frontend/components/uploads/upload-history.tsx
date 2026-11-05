@@ -108,7 +108,40 @@ export function UploadHistory({ onShowErrors }: { onShowErrors: (upload: Upload)
   }
 
   return (
-    <div className="overflow-x-auto rounded-xl border bg-card">
+    <>
+    {/* Phones: one card per upload */}
+    <ul className="divide-y rounded-xl border bg-card md:hidden" aria-label="Upload history">
+      {uploads.data.map((upload) => (
+        <li key={upload.id} className="space-y-1.5 px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <span className="min-w-0 truncate font-medium" title={upload.filename}>{upload.filename}</span>
+            <StatusPill {...UPLOAD_STATUS[upload.status]} />
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {upload.partner_name} · {FILE_KIND_LABELS[upload.file_kind]}
+            {upload.mapping_version !== null && ` · v${upload.mapping_version}`} · {formatDateTime(upload.created_at)}
+          </p>
+          <p className="money flex flex-wrap gap-x-3 text-xs">
+            <span>{formatCount(upload.rows_ok)} saved</span>
+            {upload.rows_rejected > 0 ? (
+              <button
+                type="button"
+                onClick={() => onShowErrors(upload)}
+                className="min-h-6 rounded font-medium text-loss underline underline-offset-4 outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+              >
+                {formatCount(upload.rows_rejected)} rejected
+              </button>
+            ) : (
+              <span className="text-muted-foreground">0 rejected</span>
+            )}
+            <span className="text-muted-foreground">{formatCount(upload.rows_duplicate)} duplicates</span>
+            <span className="text-muted-foreground">{formatDuration(upload.duration_ms)}</span>
+          </p>
+          {upload.error && <p className="text-xs text-loss">{upload.error}</p>}
+        </li>
+      ))}
+    </ul>
+    <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
       <table className="w-full min-w-[56rem] text-sm">
         <thead className="bg-muted/50">
           <tr className="text-left text-xs font-medium text-muted-foreground">
@@ -165,5 +198,6 @@ export function UploadHistory({ onShowErrors }: { onShowErrors: (upload: Upload)
         </tbody>
       </table>
     </div>
+    </>
   );
 }

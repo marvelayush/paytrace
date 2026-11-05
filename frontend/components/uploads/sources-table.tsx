@@ -99,7 +99,28 @@ export function SourcesTable({ sources, canEdit }: { sources: Source[]; canEdit:
   const [open, setOpen] = useState<Source | null>(null);
   return (
     <>
-      <div className="overflow-x-auto rounded-xl border bg-card">
+      {/* Phones: one row per report, versions one tap away */}
+      <ul className="divide-y rounded-xl border bg-card md:hidden" aria-label="Reports and mappings">
+        {sources.map((source) => (
+          <li key={source.id} className="flex items-center justify-between gap-3 px-4 py-3">
+            <div className="min-w-0">
+              <p className="truncate font-medium">
+                {source.partner_name} · {FILE_KIND_LABELS[source.file_kind]}
+              </p>
+              <p className="text-xs text-muted-foreground">
+                {source.active_mapping_version ? `Mapping v${source.active_mapping_version} of ${source.mapping_versions}` : "No mapping yet"} · last
+                upload {formatDateTime(source.last_upload_at)}
+              </p>
+            </div>
+            {source.mapping_versions > 0 && (
+              <Button size="sm" variant="ghost" onClick={() => setOpen(source)} aria-label={`Mapping versions for ${sourceLabel(source)}`}>
+                <History aria-hidden />
+              </Button>
+            )}
+          </li>
+        ))}
+      </ul>
+      <div className="hidden overflow-x-auto rounded-xl border bg-card md:block">
         <table className="w-full min-w-[40rem] text-sm">
           <thead className="bg-muted/50">
             <tr className="text-left text-xs text-muted-foreground">
