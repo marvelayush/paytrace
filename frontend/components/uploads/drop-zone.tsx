@@ -49,16 +49,24 @@ export function DropZone({
         event.preventDefault();
         if (!disabled) setDragging(true);
       }}
-      onDragLeave={() => setDragging(false)}
+      onDragLeave={(event) => {
+        // Moving over a child element fires dragleave on the parent: only reset when the pointer really leaves.
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null)) setDragging(false);
+      }}
       onDrop={handleDrop}
       className={cn(
-        "flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-card px-6 py-10 text-center transition-colors",
+        "flex cursor-pointer flex-col items-center justify-center rounded-xl border border-dashed bg-card px-6 py-10 text-center transition-[background-color,border-color,transform] duration-200 ease-out",
         "focus-within:ring-3 focus-within:ring-ring/50",
-        dragging ? "border-primary bg-sidebar-accent" : "hover:border-foreground/30 hover:bg-accent/40",
+        dragging ? "scale-[1.01] border-primary bg-sidebar-accent" : "hover:border-foreground/30 hover:bg-accent/40",
         disabled && "pointer-events-none opacity-60",
       )}
     >
-      <span className="flex size-10 items-center justify-center rounded-full bg-secondary text-muted-foreground">
+      <span
+        className={cn(
+          "flex size-10 items-center justify-center rounded-full transition-[background-color,color,transform] duration-200 ease-out",
+          dragging ? "-translate-y-0.5 bg-primary text-primary-foreground" : "bg-secondary text-muted-foreground",
+        )}
+      >
         {dragging ? <FileSpreadsheet className="size-5" aria-hidden /> : <UploadCloud className="size-5" aria-hidden />}
       </span>
       <span className="mt-3 text-sm font-medium">

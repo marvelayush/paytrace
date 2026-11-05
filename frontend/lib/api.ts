@@ -63,6 +63,31 @@ export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise
   return body as T;
 }
 
+/**
+ * POST a form with upload progress (fetch cannot report it). Same credentials and errors as apiFetch.
+ * `onProgress` receives 0–1 while the file is sent; the promise resolves once the API has answered.
+ */
+export function apiUpload<T>(path: string, form: FormData, onProgress?: (fraction: number) => void): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const request = new XMLHttpRequest();
+    request.open("POST", `${API_URL}${path}`);
+    request.withCredentials = true;
+    request.responseType = "json";
+    request.upload.onprogress = (event) => {
+      if (event.lengthComputable) onProgress?.(event.loaded / event.total);
+    };
+    request.upload.onload = () => onProgress?.(1);
+    request.onerror = () => reject(new ApiError(0, "Can't reach the PayTrace server. Check your connection and try again."));
+    request.onload = () => {
+      const body: unknown = request.response;
+      if (request.status >= 200 && request.status < 300) resolve(body as T);
+      else if (request.status === 413) reject(new ApiError(413, `The file is too large for this deployment (limit ${MAX_UPLOAD_MB} MB).`));
+      else reject(new ApiError(request.status, readErrorDetail(body, `Upload failed (${request.status}).`)));
+    };
+    request.send(form);
+  });
+}
+
 /** Fetch a file from the API (with the session cookie) and hand it to the browser as a download. */
 export async function downloadFile(path: string, fallbackName: string): Promise<void> {
   let response: Response;

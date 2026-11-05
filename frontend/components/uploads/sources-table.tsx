@@ -52,18 +52,14 @@ function VersionsDialog({ source, canEdit, onClose }: { source: Source | null; c
                       size="sm"
                       variant="outline"
                       disabled={rollback.isPending}
-                      onClick={() =>
+                      onClick={() => {
+                        // Optimistic: shown as active straight away; a refusal puts the previous version back.
+                        toast.success(`Mapping v${mapping.version} is active again`);
                         rollback.mutate(
-                          { mappingId: mapping.id },
-                          {
-                            onSuccess: () => {
-                              toast.success(`Rolled back to v${mapping.version}`);
-                              mappings.refetch();
-                            },
-                            onError: (error) => toast.error(error.message),
-                          },
-                        )
-                      }
+                          { mappingId: mapping.id, version: mapping.version },
+                          { onError: (error) => toast.error(`Rollback to v${mapping.version} failed: ${error.message}`) },
+                        );
+                      }}
                     >
                       {rollback.isPending && rollback.variables?.mappingId === mapping.id ? (
                         <LoaderCircle className="animate-spin" aria-hidden />

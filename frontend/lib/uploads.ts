@@ -2,7 +2,7 @@
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
-import { ApiError, apiFetch } from "@/lib/api";
+import { ApiError, apiFetch, apiUpload } from "@/lib/api";
 
 export type FileKind = "orders" | "settlement" | "cod_remittance" | "freight_invoice" | "warehouse_returns";
 
@@ -143,12 +143,12 @@ export function useMappings(sourceId: number | null) {
 }
 
 export function useInspect() {
-  return useMutation<Inspection, ApiError, { sourceId: number; file: File }>({
-    mutationFn: ({ sourceId, file }) => {
+  return useMutation<Inspection, ApiError, { sourceId: number; file: File; onProgress?: (fraction: number) => void }>({
+    mutationFn: ({ sourceId, file, onProgress }) => {
       const form = new FormData();
       form.append("source_id", String(sourceId));
       form.append("file", file);
-      return apiFetch<Inspection>("/uploads/inspect", { method: "POST", body: form });
+      return apiUpload<Inspection>("/uploads/inspect", form, onProgress);
     },
   });
 }
@@ -178,19 +178,64 @@ export function usePreviewMapping(sourceId: number) {
 
 export function useApproveMapping(sourceId: number) {
   const queryClient = useQueryClient();
-  return useMutation<Mapping, ApiError, { token: string; columns: Record<string, string | null>; notes: string }>({
+  return useMutation<Mapping, ApiError, { token: string; columns: Record<string, string | null>; notes: string }, MappingSnapshot>({
     mutationFn: ({ token, columns, notes }) =>
       apiFetch<Mapping>(`/sources/${sourceId}/mappings`, { method: "POST", body: JSON.stringify({ token, columns, notes }) }),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["sources"] });
+    // Optimistic: the source shows its next version as active straight away; restored if the API refuses.
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["sources"], exact: true });
+      const snapshot: MappingSnapshot = { sources: queryClient.getQueryData<Source[]>(["sources"]) };
+      if (snapshot.sources) {
+        queryClient.setQueryData<Source[]>(
+          ["sources"],
+          snapshot.sources.map((source) =>
+            source.id === sourceId
+              ? { ...source, active_mapping_version: source.mapping_versions + 1, mapping_versions: source.mapping_versions + 1 }
+              : source,
+          ),
+        );
+      }
+      return snapshot;
     },
+    onError: (_error, _variables, snapshot) => {
+      if (snapshot?.sources) queryClient.setQueryData(["sources"], snapshot.sources);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["sources"] }),
   });
 }
 
+type MappingSnapshot = { mappings?: Mapping[]; sources?: Source[] };
+
+/** Optimistic: the chosen version shows as active at once; an API refusal restores the previous state. */
 export function useRollback(sourceId: number) {
   const queryClient = useQueryClient();
-  return useMutation<Mapping, ApiError, { mappingId: number }>({
+  const mappingsKey = ["sources", sourceId, "mappings"];
+  return useMutation<Mapping, ApiError, { mappingId: number; version: number }, MappingSnapshot>({
     mutationFn: ({ mappingId }) => apiFetch<Mapping>(`/sources/${sourceId}/mappings/${mappingId}/rollback`, { method: "POST" }),
-    onSuccess: () => queryClient.invalidateQueries({ queryKey: ["sources"] }),
+    onMutate: async ({ mappingId, version }) => {
+      await queryClient.cancelQueries({ queryKey: ["sources"] });
+      const snapshot: MappingSnapshot = {
+        mappings: queryClient.getQueryData<Mapping[]>(mappingsKey),
+        sources: queryClient.getQueryData<Source[]>(["sources"]),
+      };
+      if (snapshot.mappings) {
+        queryClient.setQueryData<Mapping[]>(
+          mappingsKey,
+          snapshot.mappings.map((mapping) => ({ ...mapping, is_active: mapping.id === mappingId })),
+        );
+      }
+      if (snapshot.sources) {
+        queryClient.setQueryData<Source[]>(
+          ["sources"],
+          snapshot.sources.map((source) => (source.id === sourceId ? { ...source, active_mapping_version: version } : source)),
+        );
+      }
+      return snapshot;
+    },
+    onError: (_error, _variables, snapshot) => {
+      if (snapshot?.mappings) queryClient.setQueryData(mappingsKey, snapshot.mappings);
+      if (snapshot?.sources) queryClient.setQueryData(["sources"], snapshot.sources);
+    },
+    onSettled: () => queryClient.invalidateQueries({ queryKey: ["sources"] }),
   });
 }

@@ -1,6 +1,7 @@
 "use client";
 
-import { CircleAlert, CircleCheck, LoaderCircle, Sparkles, TriangleAlert } from "lucide-react";
+import { Check, CircleAlert, CircleCheck, Info, LoaderCircle, Sparkles, TriangleAlert } from "lucide-react";
+import { toast } from "sonner";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -10,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDate, formatDateTime, formatINR, formatWeight } from "@/lib/format";
 import {
   type Inspection,
@@ -40,18 +42,38 @@ function displayValue(field: PreviewField, value: string | number | null): strin
   }
 }
 
-function ConfidenceBadge({ confidence }: { confidence: number | null }) {
+function ConfidenceBadge({ confidence, reason }: { confidence: number | null; reason: string | null }) {
   if (confidence === null) {
     return <span className="text-xs text-muted-foreground">Chosen by you</span>;
   }
   const percent = Math.round(confidence * 100);
-  if (confidence >= 0.9) {
-    return <Badge className="border-settled/20 bg-settled-soft font-medium text-settled">High · {percent}%</Badge>;
-  }
-  if (confidence >= 0.7) {
-    return <Badge variant="secondary" className="font-medium">Medium · {percent}%</Badge>;
-  }
-  return <Badge className="border-attention/25 bg-attention-soft font-medium text-attention">Low · {percent}%</Badge>;
+  const badge =
+    confidence >= 0.9 ? (
+      <Badge className="border-settled/20 bg-settled-soft font-medium text-settled">High · {percent}%</Badge>
+    ) : confidence >= 0.7 ? (
+      <Badge variant="secondary" className="font-medium">Medium · {percent}%</Badge>
+    ) : (
+      <Badge className="border-attention/25 bg-attention-soft font-medium text-attention">Low · {percent}%</Badge>
+    );
+  if (!reason) return badge;
+  // The AI's reason sits in a tooltip on pointer devices; phones show it as text under the field instead.
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
+          aria-label={"Confidence " + percent + "%: " + reason}
+        >
+          {badge}
+          <Info className="hidden size-3.5 text-muted-foreground sm:block" aria-hidden />
+        </button>
+      </TooltipTrigger>
+      <TooltipContent side="left" className="max-w-64 text-pretty">
+        {reason}
+      </TooltipContent>
+    </Tooltip>
+  );
 }
 
 function EngineNotice({ inspection }: { inspection: Inspection }) {
@@ -98,6 +120,9 @@ export function MappingReview({
   const [confirmed, setConfirmed] = useState<Set<string>>(new Set());
   const [touched, setTouched] = useState<Set<string>>(new Set());
   const [notes, setNotes] = useState("");
+  // Optimistic approve: the bar shows the new version as approved straight away; an API refusal reverts it.
+  const [approvedVersion, setApprovedVersion] = useState<number | null>(null);
+  const nextVersion = inspection.source.mapping_versions + 1;
 
   const recheck = usePreviewMapping(sourceId);
   const approve = useApproveMapping(sourceId);
@@ -165,7 +190,22 @@ export function MappingReview({
     });
   }
 
-  const canApprove = unresolved.length === 0 && !missingOneOf && !recheck.isPending && !approve.isPending;
+  const canApprove = unresolved.length === 0 && !missingOneOf && !recheck.isPending && !approve.isPending && approvedVersion === null;
+
+  function approveMapping() {
+    setApprovedVersion(nextVersion);
+    toast.success(`Mapping v${nextVersion} approved for ${sourceLabel(inspection.source)}`);
+    approve.mutate(
+      { token: inspection.token, columns, notes },
+      {
+        onSuccess: onApproved,
+        onError: (error) => {
+          setApprovedVersion(null);
+          toast.error(`Mapping v${nextVersion} was not saved: ${error.message}`);
+        },
+      },
+    );
+  }
 
   return (
     <section aria-labelledby="review-title" className="space-y-6">
@@ -211,7 +251,7 @@ export function MappingReview({
                       {field.required && <span className="text-xs font-normal text-muted-foreground">required</span>}
                       {field.pii && <span className="text-xs font-normal text-muted-foreground">· masked</span>}
                     </Label>
-                    {field.source_column && <ConfidenceBadge confidence={field.confidence} />}
+                    {field.source_column && <ConfidenceBadge confidence={field.confidence} reason={field.reason} />}
                   </div>
                   <Select value={columns[field.name] ?? NOT_IN_FILE} onValueChange={(value) => choose(field.name, value)}>
                     <SelectTrigger
@@ -232,7 +272,7 @@ export function MappingReview({
                       ))}
                     </SelectContent>
                   </Select>
-                  {field.reason && <p className="text-xs text-muted-foreground">{field.reason}</p>}
+                  {field.reason && <p className="text-xs text-muted-foreground sm:hidden">{field.reason}</p>}
                   {field.error_count > 0 && (
                     <p className="text-xs text-loss">
                       {field.error_count} of {preview.rows_checked} preview rows don&apos;t parse as {field.type.replace("_", " ")}.
@@ -347,26 +387,29 @@ export function MappingReview({
           </Alert>
         )}
 
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:items-center sm:justify-between">
-          <p className="text-xs text-muted-foreground">
-            {canApprove
+      </div>
+
+      {/* Sticky approve bar: always reachable, above the mobile bottom navigation. */}
+      <div className="sticky bottom-[calc(4.25rem+env(safe-area-inset-bottom))] z-20 flex flex-col-reverse gap-3 rounded-xl border bg-card/95 px-4 py-3 shadow-float backdrop-blur sm:flex-row sm:items-center sm:justify-between lg:bottom-4">
+        <p className="text-xs text-muted-foreground" aria-live="polite">
+          {approvedVersion !== null
+            ? `v${approvedVersion} approved. Processing the file…`
+            : canApprove
               ? "Approving saves this as a new mapping version. Earlier versions stay available for rollback."
               : missingOneOf
                 ? `Map at least one of: ${missingOneOf.one_of_group?.join(" or ")}.`
-                : `Check the ${unresolved.length} highlighted field${unresolved.length === 1 ? "" : "s"} first.`}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={onCancel} disabled={approve.isPending}>
-              Cancel
-            </Button>
-            <Button
-              disabled={!canApprove}
-              onClick={() => approve.mutate({ token: inspection.token, columns, notes }, { onSuccess: onApproved })}
-            >
-              {approve.isPending && <LoaderCircle className="animate-spin" aria-hidden />}
-              Approve and process file
-            </Button>
-          </div>
+                : unresolved.length
+                  ? `Check the ${unresolved.length} highlighted field${unresolved.length === 1 ? "" : "s"} first.`
+                  : "Re-checking the preview…"}
+        </p>
+        <div className="flex shrink-0 gap-2">
+          <Button variant="outline" onClick={onCancel} disabled={approvedVersion !== null}>
+            Cancel
+          </Button>
+          <Button disabled={!canApprove} onClick={approveMapping} className="flex-1 sm:flex-none">
+            {approvedVersion !== null && <Check aria-hidden />}
+            {approvedVersion !== null ? `v${approvedVersion} approved` : `Approve v${nextVersion} and process`}
+          </Button>
         </div>
       </div>
     </section>
