@@ -20,8 +20,10 @@ services:
         generateValue: true
       - key: COOKIE_SECURE
         value: "true"
+      - key: FORWARDED_HOPS
+        value: "2" # Vercel proxy + Render's load balancer; use "1" in direct mode
       - key: COOKIE_SAMESITE
-        value: none # direct mode: the frontend is on another site. Use "lax" in proxy mode.
+        value: lax # proxy mode (default): the browser only talks to the Vercel site. Direct mode needs "none".
       - key: FRONTEND_ORIGIN
         sync: false # e.g. https://paytrace.vercel.app (comma-separate several)
       - key: GEMINI_API_KEY

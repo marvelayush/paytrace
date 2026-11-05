@@ -7,6 +7,15 @@
 
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
+/** Proxy mode: the API is reached through this site's /api route (see deployment.md). */
+export const IS_PROXY_MODE = API_URL.startsWith("/");
+
+/**
+ * Largest upload the browser will send. Through the Vercel proxy, request bodies are capped at about
+ * 4.5 MB, so proxy mode defaults to 4 MB; direct mode matches the API's own 50 MB limit.
+ */
+export const MAX_UPLOAD_MB = Number(process.env.NEXT_PUBLIC_MAX_UPLOAD_MB) || (IS_PROXY_MODE ? 4 : 50);
+
 export class ApiError extends Error {
   /** HTTP status, or 0 when the server could not be reached at all. */
   readonly status: number;

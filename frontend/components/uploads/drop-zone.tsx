@@ -3,9 +3,9 @@
 import { FileSpreadsheet, UploadCloud } from "lucide-react";
 import { type DragEvent, useId, useRef, useState } from "react";
 
+import { IS_PROXY_MODE, MAX_UPLOAD_MB as MAX_MB } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
-const MAX_MB = 50;
 const ACCEPTED = [".csv", ".xlsx"];
 
 /** Checks done in the browser for a quick answer; the API enforces the same limits. */
@@ -13,7 +13,11 @@ export function checkFile(file: File): string | null {
   const name = file.name.toLowerCase();
   if (!ACCEPTED.some((extension) => name.endsWith(extension))) return "Upload a .csv or .xlsx file.";
   if (file.size === 0) return "The file is empty.";
-  if (file.size > MAX_MB * 1024 * 1024) return `The file is larger than ${MAX_MB} MB.`;
+  if (file.size > MAX_MB * 1024 * 1024) {
+    return IS_PROXY_MODE
+      ? `The file is larger than ${MAX_MB} MB, the upload limit on this deployment. Split it by date range and upload the parts.`
+      : `The file is larger than ${MAX_MB} MB.`;
+  }
   return null;
 }
 
