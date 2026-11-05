@@ -1,9 +1,12 @@
 "use client";
 
-import { Gauge, LoaderCircle, RefreshCw } from "lucide-react";
+import { Gauge, LoaderCircle, RefreshCw, Upload } from "lucide-react";
+import { m } from "motion/react";
 import Link from "next/link";
 import { toast } from "sonner";
 
+import { CountUp } from "@/components/count-up";
+import { EASE_OUT } from "@/components/motion";
 import { EmptyState, ErrorState, PageHeader } from "@/components/page-header";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -17,8 +20,23 @@ import { cn } from "@/lib/utils";
 type Loaded = Extract<DashboardData, { kpis: unknown }>;
 
 const AUTO_MATCH_TARGET = 98;
+const formatPercent = (value: number) => `${value.toFixed(1)}%`;
 
-function Kpi({ label, value, detail, tone, badge }: { label: string; value: string; detail: string; tone?: "loss"; badge?: string }) {
+function Kpi({
+  label,
+  value,
+  format,
+  detail,
+  tone,
+  badge,
+}: {
+  label: string;
+  value: number;
+  format: (value: number) => string;
+  detail: string;
+  tone?: "loss";
+  badge?: string;
+}) {
   return (
     <div className="rounded-xl border bg-card px-4 py-4">
       <div className="flex items-center justify-between gap-2">
@@ -29,7 +47,9 @@ function Kpi({ label, value, detail, tone, badge }: { label: string; value: stri
           </Badge>
         )}
       </div>
-      <p className={cn("money mt-1.5 text-2xl font-semibold tracking-tight sm:text-3xl", tone === "loss" && "text-loss")}>{value}</p>
+      <p className={cn("money mt-1.5 text-2xl font-semibold tracking-tight sm:text-3xl", tone === "loss" && "text-loss")}>
+        <CountUp value={value} format={format} />
+      </p>
       <p className="mt-1 text-xs text-muted-foreground">{detail}</p>
     </div>
   );
@@ -40,6 +60,10 @@ function tint(amount: number, max: number): React.CSSProperties | undefined {
   if (!amount || !max) return undefined;
   const strength = 6 + Math.round(34 * Math.sqrt(amount / max)); // square root keeps small cells visible
   return { backgroundColor: `color-mix(in oklch, var(--loss) ${strength}%, var(--card))` };
+}
+
+function ordersLink(params: Record<string, string>): string {
+  return `/orders?${new URLSearchParams({ ...params, from: "risk" })}`;
 }
 
 function Matrix({ data }: { data: Loaded }) {
@@ -66,23 +90,29 @@ function Matrix({ data }: { data: Loaded }) {
             </tr>
           </thead>
           <tbody>
-            {data.matrix.map((row) => (
+            {data.matrix.map((row, rowIndex) => (
               <tr key={row.partner_id} className="border-t">
                 <th scope="row" className="px-5 py-1.5 text-left font-medium">
                   {row.partner_name}
                 </th>
-                {AGE_BUCKETS.map((bucket) => {
+                {AGE_BUCKETS.map((bucket, bucketIndex) => {
                   const cell = row.buckets[bucket];
                   const label = `${row.partner_name}, ${bucket} days overdue: ${formatINR(cell.at_risk_paise)} across ${cell.orders} orders`;
                   return (
-                    <td key={bucket} className="p-1">
+                    <m.td
+                      key={bucket}
+                      className="p-1"
+                      initial={{ opacity: 0 }}
+                      animate={{ opacity: 1 }}
+                      transition={{ duration: 0.22, ease: EASE_OUT, delay: 0.06 + (rowIndex + bucketIndex) * 0.025 }}
+                    >
                       {cell.orders ? (
                         <Link
-                          href={`/orders?partner=${row.partner_id}&age=${encodeURIComponent(bucket)}`}
+                          href={ordersLink({ partner: String(row.partner_id), age: bucket, status: "flagged" })}
                           title={label}
                           aria-label={label}
                           style={tint(cell.at_risk_paise, max)}
-                          className="money block rounded-md px-2 py-2 text-right outline-none transition-shadow hover:ring-2 hover:ring-loss/40 focus-visible:ring-3 focus-visible:ring-ring/60"
+                          className="money block rounded-md px-2 py-2 text-right outline-none transition-shadow duration-150 hover:ring-2 hover:ring-loss/40 focus-visible:ring-3 focus-visible:ring-ring/60"
                         >
                           <span className="block font-medium">{formatINRCompact(cell.at_risk_paise)}</span>
                           <span className="block text-xs text-muted-foreground">{formatCount(cell.orders)} orders</span>
@@ -92,12 +122,12 @@ function Matrix({ data }: { data: Loaded }) {
                           —
                         </span>
                       )}
-                    </td>
+                    </m.td>
                   );
                 })}
                 <td className="px-5 py-1.5 text-right">
                   <Link
-                    href={`/orders?partner=${row.partner_id}&status=flagged`}
+                    href={ordersLink({ partner: String(row.partner_id), status: "flagged" })}
                     className="money rounded font-semibold text-loss underline-offset-4 outline-none hover:underline focus-visible:ring-3 focus-visible:ring-ring/50"
                   >
                     {formatINR(row.at_risk_paise)}
@@ -139,7 +169,7 @@ function Reasons({ data }: { data: Loaded }) {
         {flagged.map((row) => (
           <li key={row.status}>
             <Link
-              href={`/orders?status=${row.status}`}
+              href={ordersLink({ status: row.status })}
               className="group block rounded-md outline-none focus-visible:ring-3 focus-visible:ring-ring/50"
               title={`${STATUS_META[row.status].label}: ${formatINR(row.at_risk_paise)} across ${row.orders} orders`}
             >
@@ -148,7 +178,13 @@ function Reasons({ data }: { data: Loaded }) {
                 <span className="money font-medium">{formatINRCompact(row.at_risk_paise)}</span>
               </span>
               <span className="mt-1.5 block h-2 rounded-full bg-secondary" aria-hidden>
-                <span className="block h-2 rounded-full bg-loss/80" style={{ width: `${Math.max(2, (100 * row.at_risk_paise) / max)}%` }} />
+                <m.span
+                  className="block h-2 origin-left rounded-full bg-loss/80"
+                  style={{ width: `${Math.max(2, (100 * row.at_risk_paise) / max)}%` }}
+                  initial={{ scaleX: 0 }}
+                  animate={{ scaleX: 1 }}
+                  transition={{ duration: 0.25, ease: EASE_OUT, delay: 0.1 }}
+                />
               </span>
               <span className="mt-1 block text-xs text-muted-foreground">
                 {formatCount(row.orders)} orders · {STATUS_META[row.status].help.toLowerCase()}
@@ -193,41 +229,66 @@ function TaxSummary({ data }: { data: Loaded }) {
   );
 }
 
+function DashboardSkeleton() {
+  return (
+    <div aria-busy aria-label="Loading money at risk">
+      <PageHeader title="Money at risk" />
+      <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        {Array.from({ length: 4 }, (_, index) => (
+          <div key={index} className="space-y-3 rounded-xl border bg-card px-4 py-4">
+            <Skeleton className="h-3.5 w-24" />
+            <Skeleton className="h-8 w-32" />
+            <Skeleton className="h-3 w-full max-w-48" />
+          </div>
+        ))}
+      </div>
+      <div className="mt-6 overflow-hidden rounded-xl border bg-card">
+        <div className="border-b px-5 py-4">
+          <Skeleton className="h-4 w-56" />
+        </div>
+        <div className="space-y-1 overflow-hidden p-3">
+          {Array.from({ length: 6 }, (_, index) => (
+            <div key={index} className="grid min-w-[36rem] grid-cols-[8rem_repeat(4,1fr)_7rem] items-center gap-2 px-2">
+              <Skeleton className="h-3.5 w-24" />
+              {Array.from({ length: 4 }, (__, cell) => (
+                <Skeleton key={cell} className="h-11 rounded-md" />
+              ))}
+              <Skeleton className="ml-auto h-3.5 w-20" />
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="mt-6 grid gap-6 lg:grid-cols-2">
+        <Skeleton className="h-56 rounded-xl" />
+        <Skeleton className="h-56 rounded-xl" />
+      </div>
+    </div>
+  );
+}
+
 export function DashboardView() {
   const { data: user } = useCurrentUser();
   const dashboard = useDashboard();
   const run = useRunReconciliation();
   const editor = canEdit(user);
 
+  function runReconciliation() {
+    const pending = toast.loading("Reconciling every order…");
+    run.mutate(undefined, {
+      onSuccess: (summary) =>
+        toast.success(`Reconciled ${formatCount(summary.order_count)} orders in ${formatDuration(summary.duration_ms)}`, { id: pending }),
+      onError: (error) => toast.error(error.message, { id: pending }),
+    });
+  }
+
   const runButton = editor && (
-    <Button
-      variant="outline"
-      onClick={() =>
-        run.mutate(undefined, {
-          onSuccess: (summary) => toast.success(`Reconciled ${formatCount(summary.order_count)} orders in ${formatDuration(summary.duration_ms)}`),
-          onError: (error) => toast.error(error.message),
-        })
-      }
-      disabled={run.isPending}
-    >
+    <Button variant="outline" onClick={runReconciliation} disabled={run.isPending}>
       {run.isPending ? <LoaderCircle className="animate-spin" aria-hidden /> : <RefreshCw aria-hidden />}
       Run reconciliation
     </Button>
   );
 
-  if (dashboard.isPending) {
-    return (
-      <>
-        <PageHeader title="Money at risk" />
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-          {Array.from({ length: 4 }, (_, index) => (
-            <Skeleton key={index} className="h-28 rounded-xl" />
-          ))}
-        </div>
-        <Skeleton className="mt-6 h-80 w-full rounded-xl" />
-      </>
-    );
-  }
+  if (dashboard.isPending) return <DashboardSkeleton />;
   if (dashboard.error) {
     return (
       <>
@@ -240,16 +301,23 @@ export function DashboardView() {
   if (!("kpis" in data)) {
     return (
       <>
-        <PageHeader title="Money at risk" actions={runButton} />
-        <EmptyState icon={Gauge} title="No reconciliation has run yet">
-          {editor ? (
-            <>
-              <Link href="/uploads" className="text-primary underline underline-offset-4">Upload partner reports</Link>; reconciliation runs as
-              soon as a file is processed.
-            </>
-          ) : (
-            "Once the finance team uploads partner reports, what each partner still owes appears here."
-          )}
+        <PageHeader title="Money at risk" />
+        <EmptyState
+          icon={Gauge}
+          title="No reconciliation has run yet"
+          action={
+            editor ? (
+              <Button asChild size="sm">
+                <Link href="/uploads">
+                  <Upload aria-hidden /> Upload partner reports
+                </Link>
+              </Button>
+            ) : undefined
+          }
+        >
+          {editor
+            ? "Reconciliation runs as soon as a partner report is processed."
+            : "Once the finance team uploads partner reports, what each partner still owes appears here."}
         </EmptyState>
       </>
     );
@@ -268,24 +336,28 @@ export function DashboardView() {
       <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
         <Kpi
           label="Money at risk"
-          value={formatINRCompact(kpis.money_at_risk_paise)}
+          value={kpis.money_at_risk_paise}
+          format={formatINRCompact}
           detail={`${formatCount(kpis.orders_at_risk)} orders short, unpaid, overcharged or lost`}
           tone="loss"
         />
         <Kpi
           label="Auto-matched"
-          value={`${autoMatch.toFixed(1)}%`}
+          value={autoMatch}
+          format={formatPercent}
           detail={`Orders linked to partner lines without manual work · target ${AUTO_MATCH_TARGET}%`}
           badge={autoMatch >= AUTO_MATCH_TARGET ? "On target" : "Below target"}
         />
         <Kpi
           label="Open claims"
-          value={formatINRCompact(kpis.open_claims.total_paise)}
+          value={kpis.open_claims.total_paise}
+          format={formatINRCompact}
           detail={`${formatCount(kpis.open_claims.claims)} ready to file · ${formatINRCompact(kpis.filed_claims.total_paise)} filed · ${formatINRCompact(kpis.recovered_claims.total_paise)} recovered`}
         />
         <Kpi
           label="TCS + TDS withheld"
-          value={formatINRCompact(kpis.tcs_paise + kpis.tds_paise)}
+          value={kpis.tcs_paise + kpis.tds_paise}
+          format={formatINRCompact}
           detail={`TCS ${formatINRCompact(kpis.tcs_paise)} · TDS ${formatINRCompact(kpis.tds_paise)} · claimable, not lost`}
           badge="Tax, not leakage"
         />
@@ -295,7 +367,9 @@ export function DashboardView() {
         {data.matrix.length ? (
           <Matrix data={data} />
         ) : (
-          <EmptyState icon={Gauge} title="Nothing at risk">Every order that is due has been paid correctly.</EmptyState>
+          <EmptyState icon={Gauge} title="Nothing at risk">
+            Every order that is due has been paid correctly.
+          </EmptyState>
         )}
       </div>
 

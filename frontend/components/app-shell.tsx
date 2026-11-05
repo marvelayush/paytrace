@@ -184,7 +184,7 @@ function SearchButton() {
       )}
     >
       <Search className="size-4" aria-hidden />
-      <span className="flex-1 text-left">Search or jump to…</span>
+      <span className="flex-1 truncate text-left whitespace-nowrap">Search…</span>
       <kbd className="rounded border bg-card px-1.5 font-sans text-[11px]">{mod} K</kbd>
     </button>
   );
