@@ -233,6 +233,12 @@ export function AppShell({ user, children }: { user: User; children: React.React
   useGlobalShortcuts(overlay === "palette");
   // Once opened, keep each overlay mounted so its close animation and state survive.
   const [loaded, setLoaded] = useState({ palette: false, shortcuts: false });
+  // Mount the (closed) palette once the first screen is idle. Mounting it on the first Ctrl+K took about 300 ms,
+  // and the keys typed in that time were lost.
+  useEffect(() => {
+    const whenIdle = window.requestIdleCallback ?? ((callback: () => void) => window.setTimeout(callback, 2000));
+    whenIdle(() => setLoaded((current) => ({ ...current, palette: true })));
+  }, []);
   if (overlay && !loaded[overlay]) setLoaded({ ...loaded, [overlay]: true });
 
   return (
