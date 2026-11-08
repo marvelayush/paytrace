@@ -74,10 +74,25 @@ class Inputs:
     receipts: pl.DataFrame
 
 
-def load_inputs(db: Session) -> Inputs:
+# Receipts: warehouse scans plus returns a finance executive confirmed by hand (A44).
+RECEIPTS_QUERY = (
+    "SELECT order_id, (received_at AT TIME ZONE 'Asia/Kolkata')::date AS received_on FROM warehouse_receipts"
+    " UNION ALL SELECT order_id, received_on FROM manual_return_receipts"
+)
+
+
+def load_inputs(db: Session, order_ids: list[str] | None = None) -> Inputs:
+    """Everything matching needs. With `order_ids`, only those orders and the lines that may belong to them."""
     i64, s, d = pl.Int64, pl.String, pl.Date
+    orders_where = lines_where = receipts_where = ""
+    if order_ids is not None:
+        ids = ", ".join(_quote(order_id) for order_id in order_ids) or "NULL"
+        awbs = f"(SELECT awb FROM orders WHERE order_id IN ({ids}) AND awb IS NOT NULL)"
+        orders_where = f" WHERE order_id IN ({ids})"
+        lines_where = f" WHERE order_id IN ({ids}) OR awb IN {awbs}"
+        receipts_where = f" WHERE order_id IN ({ids}) OR order_id IN {awbs}"
     return Inputs(
-        orders=load_frame(db, "SELECT order_id, channel_partner_id, courier_partner_id, awb, order_date, delivered_date, returned_date, value_paise, payment_mode, delivery_status, dead_weight_g, volumetric_weight_g FROM orders", {
+        orders=load_frame(db, "SELECT order_id, channel_partner_id, courier_partner_id, awb, order_date, delivered_date, returned_date, value_paise, payment_mode, delivery_status, dead_weight_g, volumetric_weight_g FROM orders" + orders_where, {
             "order_id": s, "channel_partner_id": i64, "courier_partner_id": i64, "awb": s, "order_date": d, "delivered_date": d,
             "returned_date": d, "value_paise": i64, "payment_mode": s, "delivery_status": s, "dead_weight_g": i64, "volumetric_weight_g": i64}),
         partners=load_frame(db, "SELECT id, kind, settlement_days FROM partners", {"id": i64, "kind": s, "settlement_days": i64}),
@@ -85,12 +100,17 @@ def load_inputs(db: Session) -> Inputs:
             "id": i64, "partner_id": i64, "effective_from": d, "commission_pct_bp": i64, "fixed_fee_paise": i64, "cod_fee_paise": i64,
             "cod_fee_pct_bp": i64, "gateway_pct_bp": i64, "tcs_pct_bp": i64, "tds_pct_bp": i64}),
         slabs=load_frame(db, "SELECT rate_card_id, leg, up_to_g, price_paise FROM weight_slabs", {"rate_card_id": i64, "leg": s, "up_to_g": i64, "price_paise": i64}),
-        settlements=load_frame(db, "SELECT order_id, net_paise, tcs_paise, tds_paise FROM settlement_lines", {"order_id": s, "net_paise": i64, "tcs_paise": i64, "tds_paise": i64}),
-        cod=load_frame(db, "SELECT order_id, awb, amount_paise FROM cod_remittances", {"order_id": s, "awb": s, "amount_paise": i64}),
-        freight=load_frame(db, "SELECT order_id, awb, leg, freight_paise, cod_fee_paise FROM freight_lines", {
+        settlements=load_frame(db, "SELECT order_id, net_paise, tcs_paise, tds_paise FROM settlement_lines" + orders_where, {"order_id": s, "net_paise": i64, "tcs_paise": i64, "tds_paise": i64}),
+        cod=load_frame(db, "SELECT order_id, awb, amount_paise FROM cod_remittances" + lines_where, {"order_id": s, "awb": s, "amount_paise": i64}),
+        freight=load_frame(db, "SELECT order_id, awb, leg, freight_paise, cod_fee_paise FROM freight_lines" + lines_where, {
             "order_id": s, "awb": s, "leg": s, "freight_paise": i64, "cod_fee_paise": i64}),
-        receipts=load_frame(db, "SELECT order_id, (received_at AT TIME ZONE 'Asia/Kolkata')::date AS received_on FROM warehouse_receipts", {"order_id": s, "received_on": d}),
+        receipts=load_frame(db, f"SELECT * FROM ({RECEIPTS_QUERY}) AS receipts" + receipts_where, {"order_id": s, "received_on": d}),
     )
+
+
+def _quote(value: str) -> str:
+    """A SQL string literal. Order IDs come from the database or a validated request, but never trust that."""
+    return "'" + value.replace("'", "''") + "'"
 
 
 # ---------- expected amounts (vectorised mirror of expected.py) ----------
@@ -414,3 +434,19 @@ def run_reconciliation(db: Session, started_by: int | None, as_of: date | None =
     run.stats_json = summary.as_dict()
     db.flush()
     return summary
+
+
+def reconcile_orders(db: Session, order_ids: list[str], return_window_days: int = 7) -> int:
+    """Re-match a few orders after a person linked a line or confirmed a return, without a full run.
+
+    Uses the latest run's date, so these orders age exactly like the rest, and replaces only their result rows.
+    Returns how many result rows were written (0 when there is no run yet: the next full run covers them).
+    """
+    run = db.execute(text("SELECT id, as_of FROM recon_runs WHERE finished_at IS NOT NULL ORDER BY id DESC LIMIT 1")).first()
+    if run is None or not order_ids:
+        return 0
+    db.execute(text("SELECT pg_advisory_xact_lock(4242)"))  # never interleave with a full run
+    results, _ = reconcile(load_inputs(db, order_ids), run.as_of, return_window_days)
+    db.execute(text("DELETE FROM recon_results WHERE order_id = ANY(:ids)"), {"ids": order_ids})
+    copy_frame(db, "recon_results", _results_for_copy(results, run.id))
+    return results.height
