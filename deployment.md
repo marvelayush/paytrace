@@ -2,9 +2,9 @@
 
 | | |
 |---|---|
-| GitHub repository | `https://github.com/<your-user>/paytrace`  ← replace after pushing |
-| Live app | `https://<your-project>.vercel.app`  ← replace after deploying |
-| Backend health | `https://<your-service>.onrender.com/health`  ← replace after deploying |
+| GitHub repository | https://github.com/marvelayush/paytrace |
+| Live app | https://paytrace-two.vercel.app |
+| Backend health | https://paytrace-api.onrender.com/health |
 
 Three free-tier services: **Neon** (Postgres), **Render** (FastAPI backend), **Vercel** (Next.js frontend).
 Everything below is clicks and copy-paste. Nothing secret is stored in the repository.
@@ -13,10 +13,8 @@ Everything below is clicks and copy-paste. Nothing secret is stored in the repos
 
 The backend runs on Render's free plan, which **sleeps after 15 minutes without traffic**. The first request then takes 30–60 seconds while it wakes up.
 
-1. Open **`https://<your-service>.onrender.com/health`** and wait until it shows `{"status":"ok","database":"ok"}`.
-2. Then open the app at **`https://<your-project>.vercel.app`** and sign in with a demo account below.
-
-(Replace the two URLs above with the live ones once deployed.)
+1. Open **https://paytrace-api.onrender.com/health** and wait until it shows `{"status":"ok","database":"ok"}`.
+2. Then open the app at **https://paytrace-two.vercel.app** and sign in with a demo account below.
 
 ## Demo accounts
 
@@ -170,4 +168,4 @@ Uploads then go straight to the backend, up to 50 MB. *Direct mode without a sha
 - [ ] Returns → all three states show (Not received, Waiting, Received). Waiting returns age out after 7 days; re-run the seed to refresh them
 - [ ] Claims → a claim → **PDF summary** downloads
 - [ ] Sign in as co-founder: no Uploads, no edit buttons; exports still work
-- [ ] Replace the two placeholder URLs at the top of this file with the live ones and commit
+- [x] Live URLs recorded at the top of this file

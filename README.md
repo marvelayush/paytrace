@@ -2,13 +2,17 @@
 
 **Order-level payment reconciliation for a D2C brand: upload every partner's reports and see, per order, whether you were paid the right amount.**
 
+**Live app:** https://paytrace-two.vercel.app · **Backend:** https://paytrace-api.onrender.com ([`/health`](https://paytrace-api.onrender.com/health)) · **Code:** https://github.com/marvelayush/paytrace
+
+> The backend runs on Render's free plan and sleeps after 15 idle minutes. If the app says it is not responding, open the backend `/health` link first, wait up to a minute for `{"status":"ok","database":"ok"}`, then reload. Demo logins are in [deployment.md](deployment.md#demo-accounts).
+
 A D2C home-textiles brand sells on its own website, three marketplaces and two quick-commerce apps, and ships through two courier aggregators. About 30,000 orders a month at ₹1,200 each pass through partners that deduct commissions, fees and freight before paying out. Roughly **1.5% of order value leaks** through unremitted cash on delivery (COD), wrong fees, wrong weight slabs and returns that never reach the warehouse: about ₹64.8 lakh a year. Finance finds it by matching spreadsheets with lookups, and month-end close takes 12 days.
 
 PayTrace takes each partner's settlement, COD remittance, freight invoice and warehouse return files, in whatever layout the partner uses. It works out what each order *should* have paid under the rate card and compares that with what actually arrived. Anything short, unpaid, overcharged or lost goes into a claims list, with evidence traced to the file and row it came from.
 
 | | |
 |---|---|
-| Live demo | _add the live link after deploying_ |
+| Live demo | https://paytrace-two.vercel.app |
 | Demo logins | [deployment.md → Demo accounts](deployment.md#demo-accounts) |
 | Spec | [docs/SPEC.md](docs/SPEC.md) |
 | Assumptions (A1–A47) | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) |
