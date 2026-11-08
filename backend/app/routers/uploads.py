@@ -1,14 +1,15 @@
 """Uploading partner files: inspect (mapping + preview), process, history and rejected rows."""
 
-from fastapi import APIRouter, Depends, File, Form, HTTPException, Response, UploadFile, status
-from sqlalchemy import select
+from fastapi import APIRouter, BackgroundTasks, Depends, File, Form, HTTPException, Response, UploadFile, status
+from sqlalchemy import select, update
 from sqlalchemy.orm import Session
 
 from app.auth import current_user, require_finance_exec
 from app.config import get_settings
 from app.db import get_db
-from app.models import ColumnMapping, Partner, Source, Upload, UploadRowError, User
+from app.models import ColumnMapping, Partner, Source, UnmatchedLine, Upload, UploadRowError, User
 from app.routers.recon import reconcile_now
+from app.routers.review import get_match_ranker, rank_in_background
 from app.routers.sources import get_source, mapping_out, source_out
 from app.schemas.uploads import InspectOut, ProcessOut, ProcessRequest, RowErrorOut, SuggestionOut, UploadOut
 from app.services.canonical import CANONICAL_FIELDS
@@ -16,7 +17,9 @@ from app.services.csv_safe import csv_text
 from app.services.fingerprint import header_fingerprint
 from app.services.mapping_ai import FieldSuggestion, MappingSuggester, MappingSuggestion, get_suggester
 from app.services.mappings import build_preview
+from app.services.match_ai import MatchRanker, RuleRanker
 from app.services.parsing import FileReadError, headers_of, read_table, sample_rows
+from app.services.review_queue import refresh_suggestions
 from app.services.upload_processing import process_file
 from app.services.upload_store import UploadRejected, discard_upload, load_upload, save_suggestion, save_upload
 
@@ -137,7 +140,12 @@ def upload_out(db: Session, upload: Upload) -> UploadOut:
 
 @router.post("/uploads/{token}/process", response_model=ProcessOut)
 def process_upload(
-    token: str, body: ProcessRequest, db: Session = Depends(get_db), user: User = Depends(require_finance_exec)
+    token: str,
+    body: ProcessRequest,
+    background: BackgroundTasks,
+    db: Session = Depends(get_db),
+    user: User = Depends(require_finance_exec),
+    ranker: MatchRanker = Depends(get_match_ranker),
 ) -> ProcessOut:
     """Process the whole file with an approved mapping of its source."""
     stored = load_upload(token)
@@ -153,7 +161,21 @@ def process_upload(
         discard_upload(stored)
     # New data changes results: re-run reconciliation straight away so nothing on screen is stale.
     reconciliation = reconcile_now(db, user.id) if upload.status == "done" and upload.rows_ok else None
+    if upload.status == "done" and upload.rows_unmatched:
+        queue_new_lines(db, upload.id, ranker, background)
     return ProcessOut(upload=upload_out(db, upload), reconciliation=reconciliation)
+
+
+def queue_new_lines(db: Session, upload_id: int, ranker: MatchRanker, background: BackgroundTasks) -> None:
+    """Rule suggestions at once for this upload's lines without an order ID; AI ranking after the response."""
+    line_ids = list(db.scalars(select(UnmatchedLine.id).where(UnmatchedLine.upload_id == upload_id, UnmatchedLine.status == "open")))
+    refresh_suggestions(db, ranker=None, line_ids=line_ids)
+    if not isinstance(ranker, RuleRanker):
+        db.execute(update(UnmatchedLine).where(UnmatchedLine.id.in_(line_ids)).values(ai_note="pending"))
+        background.add_task(rank_in_background, line_ids, ranker)
+    else:
+        db.execute(update(UnmatchedLine).where(UnmatchedLine.id.in_(line_ids)).values(ai_note=ranker.note))
+    db.commit()
 
 
 @router.get("/uploads", response_model=list[UploadOut])
