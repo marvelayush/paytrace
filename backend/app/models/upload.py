@@ -20,6 +20,8 @@ class Upload(Base):
     rows_rejected: Mapped[int] = mapped_column(Integer, default=0)
     # Lines already stored by an earlier upload (same partner, same values): skipped, not double-counted.
     rows_duplicate: Mapped[int] = mapped_column(Integer, default=0)
+    # Lines with no order ID: sent to the review queue (neither saved to the ledger nor rejected).
+    rows_unmatched: Mapped[int] = mapped_column(Integer, default=0, server_default="0")
     status: Mapped[str] = mapped_column(String(20), default="pending", index=True)
     error: Mapped[str | None] = mapped_column(Text)
     uploaded_by: Mapped[int | None] = mapped_column(ForeignKey("users.id"))

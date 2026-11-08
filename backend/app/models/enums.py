@@ -20,3 +20,7 @@ RECON_STATUSES = (
     "pending",
 )
 CLAIM_STATUSES = ("open", "filed", "recovered", "rejected")
+# Review queue: partner lines that arrived without an order ID.
+QUEUE_LINE_KINDS = ("settlement", "cod_remittance")
+QUEUE_STATUSES = ("open", "accepted", "rejected")
+RANKING_ENGINES = ("rules", "llm")

@@ -7,6 +7,7 @@ from app.models.ledger import CodRemittance, FreightLine, Order, SettlementLine,
 from app.models.partner import ColumnMapping, Partner, Source
 from app.models.rate_card import RateCard, WeightSlab
 from app.models.recon import ReconResult, ReconRun
+from app.models.review import ManualReturnReceipt, UnmatchedLine
 from app.models.upload import Upload, UploadRowError
 from app.models.user import User
 
@@ -18,6 +19,7 @@ __all__ = [
     "CodRemittance",
     "ColumnMapping",
     "FreightLine",
+    "ManualReturnReceipt",
     "Order",
     "Partner",
     "RateCard",
@@ -26,6 +28,7 @@ __all__ = [
     "SettlementLine",
     "Source",
     "Upload",
+    "UnmatchedLine",
     "UploadRowError",
     "User",
     "WarehouseReceipt",
