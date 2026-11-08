@@ -41,7 +41,7 @@ export function useLogin() {
   const queryClient = useQueryClient();
   return useMutation<User, ApiError, { email: string; password: string }>({
     mutationFn: (credentials) =>
-      apiFetch<User>("/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
+      apiFetch<User>("/auth/login", { method: "POST", body: JSON.stringify(credentials), coldStartRetry: true }),
     onSuccess: (user) => queryClient.setQueryData(ME_KEY, user),
   });
 }

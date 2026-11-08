@@ -5,6 +5,8 @@
  * credentials and no token is ever handled in JavaScript.
  */
 
+import { startWaking, stopWaking } from "@/lib/server-status";
+
 const API_URL = (process.env.NEXT_PUBLIC_API_URL ?? "http://localhost:8000").replace(/\/$/, "");
 
 /** Proxy mode: the API is reached through this site's /api route (see deployment.md). */
@@ -41,23 +43,71 @@ function readErrorDetail(body: unknown, fallback: string): string {
   return fallback;
 }
 
-export async function apiFetch<T>(path: string, init: RequestInit = {}): Promise<T> {
-  const headers = new Headers(init.headers);
-  if (init.body && !(init.body instanceof FormData) && !headers.has("Content-Type")) {
+/** How long to keep retrying while the free-plan backend wakes up (it takes about a minute). */
+const COLD_START_BUDGET_MS = 90_000;
+const COLD_START_STATUSES = new Set([502, 503, 504]);
+const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+export type ApiInit = RequestInit & {
+  /**
+   * Retry through a backend cold start. On by default for reads (GET/HEAD). Writes are not retried unless
+   * they opt in, because a 504 can arrive after the server already acted; sign-in opts in, since repeating
+   * it is harmless.
+   */
+  coldStartRetry?: boolean;
+};
+
+/**
+ * One request, retried with backoff while the backend is waking up: a 502/503/504 from the hosting edge,
+ * or no connection at all. While retrying, the app shows "Waking up the server…" instead of an error.
+ */
+async function fetchThroughColdStart(url: string, init: RequestInit, retry: boolean): Promise<Response> {
+  const started = Date.now();
+  let attempt = 0;
+  let waking = false;
+  try {
+    for (;;) {
+      let response: Response | null = null;
+      try {
+        response = await fetch(url, init);
+      } catch {
+        response = null; // network error: the server may still be booting
+      }
+      const coldStart = response === null || COLD_START_STATUSES.has(response.status);
+      if (!coldStart || !retry || Date.now() - started > COLD_START_BUDGET_MS) {
+        if (response === null) throw new ApiError(0, "Can't reach the PayTrace server. Check your connection and try again.");
+        return response;
+      }
+      if (!waking) {
+        waking = true;
+        startWaking();
+      }
+      attempt += 1;
+      await wait(Math.min(1000 * 2 ** (attempt - 1), 10_000)); // 1, 2, 4, 8, 10, 10… seconds
+    }
+  } finally {
+    if (waking) stopWaking();
+  }
+}
+
+export async function apiFetch<T>(path: string, init: ApiInit = {}): Promise<T> {
+  const { coldStartRetry, ...requestInit } = init;
+  const headers = new Headers(requestInit.headers);
+  if (requestInit.body && !(requestInit.body instanceof FormData) && !headers.has("Content-Type")) {
     headers.set("Content-Type", "application/json");
   }
+  const method = (requestInit.method ?? "GET").toUpperCase();
+  const retry = coldStartRetry ?? (method === "GET" || method === "HEAD");
 
-  let response: Response;
-  try {
-    response = await fetch(`${API_URL}${path}`, { ...init, headers, credentials: "include" });
-  } catch {
-    throw new ApiError(0, "Can't reach the PayTrace server. Check your connection and try again.");
-  }
+  const response = await fetchThroughColdStart(`${API_URL}${path}`, { ...requestInit, headers, credentials: "include" }, retry);
 
   if (response.status === 204) return undefined as T;
 
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) {
+    if (COLD_START_STATUSES.has(response.status)) {
+      throw new ApiError(response.status, "The PayTrace server is still waking up or unavailable. Wait a minute, then try again.");
+    }
     throw new ApiError(response.status, readErrorDetail(body, `Request failed (${response.status}).`));
   }
   return body as T;
