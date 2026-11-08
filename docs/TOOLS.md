@@ -45,7 +45,7 @@ Everything listed here is in the repository (requirements files, `package.json`,
 
 ## Testing and quality
 - **pytest** (with FastAPI's TestClient): **337 backend tests** (336 regular + the slow one) cover the engines, the ₹10 boundary, mapping, access control, claims, exports, PII, the returns tracker and the review queue.
-- **Slow 1-lakh test** (`pytest -m slow`): 100,000 orders and 2,55,199 partner rows end to end in **~18 s**, against a 60 s limit.
+- **Slow 1-lakh test** (`pytest -m slow`): 100,000 orders and 2,55,199 partner rows end to end in **13.6–18.2 s** across runs, against a 60 s limit.
 - **Headless Chrome**: screenshots of every screen as both roles, light and dark, at 375 px and 1440 px; frame timing while scrolling 30,000 orders (median 7.0 ms per frame).
 - **Lighthouse**: desktop dashboard 100/100/100 and orders 99/100/100 (performance / accessibility / best practices). Mobile (throttled): 79 and 77 performance, 100 accessibility and best practices.
 - **ESLint** (`eslint-config-next`): frontend lint.
