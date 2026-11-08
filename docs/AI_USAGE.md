@@ -5,8 +5,8 @@ I used AI tools throughout this project. I chose the problem, set the scope and 
 ## Tools
 - **Claude (chat):** compared the five problem statements and helped me pick this one. Helped me write the spec ([SPEC.md](SPEC.md)): scope, data model, matching rules and assumptions.
 - **Claude Code:** implemented the code milestone by milestone from my spec, wrote tests, and ran checks and browser click-throughs. Its commits carry a `Co-Authored-By` trailer.
-- **Gemini API (Google AI Studio):** the in-product AI feature that suggests column mappings, plus `scripts/eval_ai_mapping.py` to measure its accuracy.
-- _[ChatGPT / other tools I used personally: what I used each for]_
+- **Gemini API (Google AI Studio):** the in-product AI. It suggests column mappings when a partner changes its file format, and in the review queue it breaks ties between suggested orders and explains each suggestion. Its confidence there is capped by the rule score, so it can never make a match look more certain than the evidence allows. Measured with `scripts/eval_ai_mapping.py` and `scripts/eval_match_suggestions.py`.
+- [jo tumne use kiya, ya yeh line hata do]
 
 ## What I checked and decided myself
 - **The AI feature was tested with a real key, not only mocks.** The first real run showed every suggestion silently falling back to fuzzy matching: `gemini-2.5-flash` returns 404 to new API keys. The fallback worked as designed, but the AI was never used. I made the model configurable and switched to `gemini-3.1-flash-lite`, after comparing models on all 20 layouts (194/194 fields right, about 2.6 s per file).
