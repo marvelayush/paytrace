@@ -127,3 +127,37 @@ One entry per milestone: what was built, what works, and assumptions added.
 - **Every screen as both roles, light and dark, at 375 px and 1440 px** (52 screenshots, headless Chrome): no sideways scrolling, no console errors. Found and fixed during this check: screen-reader-only labels escaped their scroll containers and widened the page on phones (mobile Chrome zoomed out, hiding the bottom bar); the sticky drawer header covered the close button; "Search or jump to…" wrapped in the sidebar.
 - In a real browser: matrix cell → filtered orders with breadcrumb; keyboard ↓↓ Enter opens the third order; Ctrl+K "88120" → the brief's order (₹899 / ₹862 / −₹37); the format-changed upload goes through Parsing → Mapping (matches saved v2) → approve v3 → Done; rollback to v1 is shown at once with its toast.
 - Frontend lint and production build clean; 297 backend tests pass (plus the slow 1-lakh test).
+
+## Milestone 12 — Optional depth: returns tracker and review queue
+
+### Returns tracker
+- **Screen "Returns"**: every order the courier marked returned or RTO, with partner, courier, return date, days since return, scan status (Received / Waiting, inside the window / Not received, overdue) and value at risk. Overdue rows are tinted red and link to their claim. Summary cards double as status filters, plus courier and age chips with counts and order/AWB search. Phones get a card list.
+- **Agrees with matching by construction**: the tracker's "not received" set is exactly the `return_not_received` results (test). New warehouse scans arrive through the existing upload and mapping flow; the reconciliation that follows every upload moves them to Received.
+- **Manual receipt** (finance only): "Mark received" with a required note. It is audited, re-matches just that order (`reconcile_orders`), and drops it from its open claim. Co-founders see no button, and the API returns 403.
+- **Dashboard card**: not received / waiting / received, linking to the screen.
+- **Seed**: about 20 website returns marked in the last few days, so all three states always show (A47).
+
+### Review queue for lines without an order ID
+- **Sample data**: 82 of about 33,000 settlement and COD lines arrive without an order ID or AWB, including 3 deliberately look-alike pairs. Their references no longer contain the order number. Off by default in `generate()`, so the benchmark and older tests are unchanged.
+- **Ingestion**: those lines go to `unmatched_lines` instead of being rejected (A43). The ledger is untouched until a person decides.
+- **Step 1, rules** (vectorised, deterministic, A45): up to five candidates per line by partner, unpaid status, amount tolerance, date window and AWB.
+- **Step 2, AI**: Gemini ranks the shortlist with a confidence and a one-line reason. It sees amounts, dates, AWB and partner only, never customer data (test). Any failure, or no key, falls back to the rule order, and the screen says why.
+- **Measured, then designed** (`scripts/eval_match_suggestions.py`, A46):
+
+  | | Right order shortlisted | Suggestion right | Wrong at ≥ 0.9 confidence |
+  |---|---|---|---|
+  | Rules only | 82 / 82 | 61 / 82 | 0 |
+  | Gemini choosing freely (two prompt versions) | 82 / 82 | 47–51 / 82 | **5** before the cap, 0 after |
+  | Gemini, final (breaks ties, capped by evidence) | 82 / 82 | 61 / 82 | 0 |
+
+  The other 21 lines are exact ties: two or more orders with the same partner, value and due date, which no method can separate. They show at 50% and wait for a person. Gemini was wrong every time it overruled a clear rule winner. So in the final design it breaks exact ties and writes the reason, never overrules the rules, and never raises confidence above what the evidence supports. The measurement also exposed a real bug: candidates' due dates used the sales channel's settlement cycle instead of the courier's for COD lines (fixed).
+- **Screen "Review queue"**: each line with its suggested order, confidence, engine (AI + rules / Rules), reason, and a side-by-side comparison (amount, date, AWB, partner) that follows the selected candidate. Actions: Accept, Accept another candidate, Reject (with a note). Bulk accept only for lines at ≥ 0.9 confidence, behind a confirmation. Accepted and Rejected tabs show who decided and when.
+- **Accepting** writes the line to the ledger with the hash it would have had with an order ID (so a corrected re-send is a duplicate). It re-matches only that order, refreshes claims, re-shortlists other lines that suggested the same order, and writes the audit log. Nothing is ever linked automatically (test).
+- **Counts**: open lines in the sidebar badge, the phone bar and a dashboard card. Uploads write rule suggestions at once; AI ranking runs after the response and the screen polls while it is pending.
+- **Phones**: the bottom bar keeps five targets (At risk, Orders, Review, Claims, More); Returns, Uploads and Rate cards sit in the "More" sheet.
+
+### Checks
+- Backend: 337 tests pass (336 regular + the slow 1-lakh test at 21.5 s); 39 are new (returns 15, review queue 24). Older upload and parsing tests now count queued lines next to saved ones.
+- Frontend lint and production build (proxy mode) clean.
+- Click-through (production build, proxy mode): finance dashboard → Returns card → Waiting filter → Mark received on an overdue return (toast; overdue 149 → 148, claim updated) → Review queue → Accept the top suggestion (order unpaid → settled, queue 82 → 81) → a look-alike pair shown at 50% with both candidates. Co-founder: no checkboxes or action buttons on either screen. At 375 px in light and dark: no sideways scrolling on Review, Returns or the dashboard; no console errors.
+- Real Gemini run during seeding: 82 lines ranked in about 45 s (11 requests of up to 8 lines).

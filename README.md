@@ -6,7 +6,7 @@
 |---|---|
 | Live demo | _live link: add after deploying_ (demo accounts in [deployment.md](deployment.md)) |
 | Spec | [docs/SPEC.md](docs/SPEC.md) |
-| Assumptions (A1–A41) | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) |
+| Assumptions (A1–A47) | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) |
 | Design decisions | [docs/DECISIONS.md](docs/DECISIONS.md) |
 | Benchmark | [docs/BENCHMARK.md](docs/BENCHMARK.md): **1 lakh orders end to end in 18 s** |
 | Tools used | [docs/TOOLS.md](docs/TOOLS.md) |
@@ -25,6 +25,8 @@ _To be added: dashboard (money at risk), orders with the detail drawer, mapping 
 - **Order-level matching** of every settlement, COD and freight line (by order ID, or by AWB when a courier reports only that), with statuses `settled`, `short_paid`, `unpaid_past_due`, `freight_overcharged`, `return_not_received` (plus `pending` for not-yet-due, A11) and the brief's ₹10 tolerance.
 - **Claims** open automatically per owing partner, move open → filed → recovered / rejected (audited), and export as **evidence CSV** (every figure traced to its file and row) and a **PDF summary**.
 - **Money-at-risk dashboard**: partner × age matrix that drills into the orders, auto-match rate against the 98% target, and the claims pipeline.
+- **Returns tracker**: every returned or RTO order against warehouse receipt scans: received, waiting (inside the 7-day window) or not received (claimed). Filters by status, courier and age; a finance executive can confirm a return by hand, with a note (audited).
+- **Review queue for lines without an order ID**: rules shortlist the orders that fit (partner, amount, date window, AWB), Gemini helps rank them with a reason (no customer data sent), and a person accepts, picks another candidate or rejects. Nothing is linked automatically; bulk accept only for confidence ≥ 0.9, still one click. Accepting re-matches just that order.
 - **Two roles**: finance executive (everything) and co-founder (read and export only). Controls are hidden in the UI and refused by the API (403). A test sweeps every write route.
 - **Personal data** (DPDP Act 2023): names and phones are masked at ingestion, addresses are never stored, and nothing unmasked is sent to the AI.
 
@@ -46,8 +48,11 @@ backend/app/services/
   claims.py           claim upkeep (set-based SQL), status flow
   evidence_export.py  claim CSV + PDF
   pii.py              masking
-frontend/components/  dashboard, orders (virtualised table + drawer), claims, uploads (mapping review), rate cards
-scripts/              generate_sample_data.py, seed.py, benchmark_matching.py, eval_ai_mapping.py
+  returns.py          returns tracker (scan status against the receipt window)
+  review_queue.py     rule shortlist + people's decisions for lines without an order ID
+  match_ai.py         MatchRanker: Gemini ranking of the shortlist + rule fallback
+frontend/components/  dashboard, orders (virtualised table + drawer), claims, returns, review queue, uploads (mapping review), rate cards
+scripts/              generate_sample_data.py, seed.py, benchmark_matching.py, eval_ai_mapping.py, eval_match_suggestions.py
 sample_data/          one realistic month: 15 partner reports in their own layouts + a "format changed" file
 ```
 
@@ -90,7 +95,7 @@ Sign in as `finance@paytrace.demo` or `founder@paytrace.demo` with the passwords
 
 ```bash
 cd backend
-pytest              # 297 tests, about 5 minutes (needs the docker-compose database)
+pytest              # 336 tests, about 6 minutes (needs the docker-compose database)
 pytest -m slow      # the 1-lakh-row benchmark as a test: under 60 s required
 ```
 

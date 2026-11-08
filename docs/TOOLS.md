@@ -44,7 +44,7 @@ Everything listed here is in the repository (requirements files, `package.json`,
 - **Neon**: managed Postgres in production.
 
 ## Testing and quality
-- **pytest** (with FastAPI's TestClient): **298 backend tests** (297 regular + the slow one) cover the engines, the ₹10 boundary, mapping, access control, claims, exports and PII.
+- **pytest** (with FastAPI's TestClient): **337 backend tests** (336 regular + the slow one) cover the engines, the ₹10 boundary, mapping, access control, claims, exports, PII, the returns tracker and the review queue.
 - **Slow 1-lakh test** (`pytest -m slow`): 100,000 orders and 2,55,199 partner rows end to end in **~18 s**, against a 60 s limit.
 - **Headless Chrome**: screenshots of every screen as both roles, light and dark, at 375 px and 1440 px; frame timing while scrolling 30,000 orders (median 7.0 ms per frame).
 - **Lighthouse**: desktop dashboard 100/100/100 and orders 99/100/100 (performance / accessibility / best practices). Mobile (throttled): 79 and 77 performance, 100 accessibility and best practices.
@@ -55,7 +55,8 @@ Everything listed here is in the repository (requirements files, `package.json`,
 - **`scripts/generate_sample_data.py`**: one realistic month (30,000 orders, 15 partner reports in their own layouts, injected leakage, a "format changed" file, the brief's three sample orders).
 - **`scripts/benchmark_matching.py`**: generates 1 lakh orders with leakage, runs the full pipeline, and writes `docs/BENCHMARK.md`.
 - **`scripts/eval_ai_mapping.py`**: measures AI column mapping against every sample layout. Gemini got **194/194 fields right**; the fuzzy fallback got 190/194.
-- **`scripts/seed.py`**: demo users, partners, rate cards and mappings; loads the sample reports through the real pipeline, then reconciles.
+- **`scripts/eval_match_suggestions.py`**: scores the review-queue suggestions against the sample data's ground truth. The right order was shortlisted for 82/82 lines and suggested for 61/82; the other 21 are exact ties. No wrong suggestion reached bulk-accept confidence.
+- **`scripts/seed.py`**: demo users, partners, rate cards and mappings; loads the sample reports through the real pipeline, adds a few recent returns, reconciles, and ranks the review queue.
 
 ## Version control and deploy
 - **Git**: small commits per working step.
@@ -65,5 +66,5 @@ Everything listed here is in the repository (requirements files, `package.json`,
 - **Neon**: production Postgres.
 
 ## AI tools
-- **Gemini API (Google AI Studio key), `gemini-3.1-flash-lite`**: the in-product column-mapping suggestions, and the eval script.
+- **Gemini API (Google AI Studio key), `gemini-3.1-flash-lite`**: the in-product column-mapping suggestions and the ranking of suggested orders in the review queue, plus both eval scripts.
 - **Claude (chat)** and **Claude Code**: used to build the project. How I used them is described in [AI_USAGE.md](AI_USAGE.md).
