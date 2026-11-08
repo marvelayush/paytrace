@@ -72,7 +72,7 @@ class SampleData:
     receipts: list[dict] = field(default_factory=list)
     # (order_id, leak_type, amount_paise)
     injected: list[tuple[str, str, int]] = field(default_factory=list)
-    # Lines sent without an order ID (review queue): {kind, partner, order_id (the truth), ambiguous}
+    # Lines sent without an order ID (review queue): {kind, partner, order_id (the truth), reference, ambiguous}
     missing_ids: list[dict] = field(default_factory=list)
 
     @property
@@ -470,10 +470,12 @@ def _strip_order_ids(data: SampleData, share: float, ambiguous_pairs: int, rng: 
 
     for kind, line, ambiguous in chosen:
         partner = line["partner"] if kind == "settlement" else line["courier"]
-        data.missing_ids.append({"kind": kind, "partner": partner, "order_id": line["order_id"], "ambiguous": ambiguous})
+        true_order_id = line["order_id"]
         line["order_id"] = None
         if kind == "settlement":
             # The partner's own reference, not derived from our order number (otherwise the match would be trivial).
             line["reference"] = f"{partner[:2].upper()}{partner[-1]}-U{rng.randint(100_000, 999_999)}"
         else:
             line["awb"] = None
+        reference = line["reference"] if kind == "settlement" else line["utr"]
+        data.missing_ids.append({"kind": kind, "partner": partner, "order_id": true_order_id, "reference": reference, "ambiguous": ambiguous})
