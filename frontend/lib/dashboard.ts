@@ -4,6 +4,8 @@ import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "@/lib/api";
 import type { AgeBucket, ReconStatus } from "@/lib/recon";
+import type { ScanStatus } from "@/lib/returns";
+import type { QueueCounts } from "@/lib/review";
 
 type Cell = { orders: number; at_risk_paise: number };
 
@@ -41,6 +43,8 @@ export type DashboardData =
       bucket_totals: Record<AgeBucket, Cell>;
       by_status: { status: ReconStatus; orders: number; at_risk_paise: number; diff_paise: number }[];
       tax_by_partner: { partner_name: string; tcs_paise: number; tds_paise: number }[];
+      returns: { as_of: string; window_days: number } & Record<ScanStatus, { orders: number; value_paise: number }>;
+      review_queue: QueueCounts;
     };
 
 export function useDashboard() {

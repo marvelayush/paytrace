@@ -1,6 +1,6 @@
 "use client";
 
-import { Gauge, LoaderCircle, RefreshCw, Upload } from "lucide-react";
+import { ChevronRight, Gauge, Inbox, LoaderCircle, PackageOpen, RefreshCw, Upload } from "lucide-react";
 import { m } from "motion/react";
 import Link from "next/link";
 import { toast } from "sonner";
@@ -236,6 +236,54 @@ function TaxSummary({ data }: { data: Loaded }) {
   );
 }
 
+/** Two follow-up queues next to the money: lost returns and lines without an order ID. Each links to its screen. */
+function FollowUps({ data }: { data: Loaded }) {
+  const { returns, review_queue: queue } = data;
+  return (
+    <div className="mt-6 grid gap-3 sm:grid-cols-2">
+      <Link
+        href="/returns"
+        className="group rounded-xl border bg-card p-5 transition-colors outline-none hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <span className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <PackageOpen className="size-4 text-muted-foreground" aria-hidden />
+            Returns
+          </span>
+          <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </span>
+        <span className={cn("money mt-2 block text-xl font-semibold", returns.overdue.orders > 0 && "text-loss")}>
+          {formatCount(returns.overdue.orders)} not received
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {formatINRCompact(returns.overdue.value_paise)} of goods past the {returns.window_days}-day scan window ·{" "}
+          {formatCount(returns.waiting.orders)} waiting · {formatCount(returns.received.orders)} received
+        </span>
+      </Link>
+      <Link
+        href="/review"
+        className="group rounded-xl border bg-card p-5 transition-colors outline-none hover:bg-accent/40 focus-visible:ring-3 focus-visible:ring-ring/50"
+      >
+        <span className="flex items-center justify-between gap-2">
+          <span className="flex items-center gap-2 text-sm font-medium">
+            <Inbox className="size-4 text-muted-foreground" aria-hidden />
+            Review queue
+          </span>
+          <ChevronRight className="size-4 text-muted-foreground transition-transform group-hover:translate-x-0.5" aria-hidden />
+        </span>
+        <span className={cn("money mt-2 block text-xl font-semibold", queue.open > 0 && "text-attention")}>
+          {formatCount(queue.open)} {plural(queue.open, "line")} to review
+        </span>
+        <span className="mt-0.5 block text-xs text-muted-foreground">
+          {queue.open > 0
+            ? `${formatINRCompact(queue.open_value_paise)} paid without an order ID · ${formatCount(queue.high_confidence)} ready for bulk accept`
+            : "Every partner line is linked to an order"}
+        </span>
+      </Link>
+    </div>
+  );
+}
+
 function DashboardSkeleton() {
   return (
     <div role="status" aria-busy aria-label="Loading money at risk">
@@ -379,6 +427,8 @@ export function DashboardView() {
           </EmptyState>
         )}
       </div>
+
+      <FollowUps data={data} />
 
       <div className="mt-6 grid gap-6 lg:grid-cols-2">
         <Reasons data={data} />
