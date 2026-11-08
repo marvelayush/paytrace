@@ -171,13 +171,15 @@ class ParseResult:
 
     rows: pl.DataFrame  # canonical columns + ROW_NUMBER
     rejected: list[tuple[int, str]] = field(default_factory=list)
+    # Valid lines with no order ID (settlement, COD): they go to the review queue, not the ledger (A43).
+    unmatched: pl.DataFrame | None = None
     # field -> list of (row_number, message) for every cell that failed, for the preview
     cell_errors: dict[str, list[tuple[int, str]]] = field(default_factory=dict)
     all_rows: pl.DataFrame | None = None  # every row, typed, including rejected ones (preview only)
 
     @property
     def total(self) -> int:
-        return self.rows.height + len(self.rejected)
+        return self.rows.height + len(self.rejected) + (self.unmatched.height if self.unmatched is not None else 0)
 
 
 TYPE_LABEL = {
@@ -210,6 +212,29 @@ def _typed_column(frame: pl.DataFrame, spec: FieldSpec, header: str) -> pl.Serie
     return frame.select(expression.alias(spec.name)).to_series()
 
 
+# Lines that can be sent to the review queue when they carry no order ID, and the fields that identify them.
+QUEUE_ID_FIELDS: dict[str, tuple[str, ...]] = {"settlement": ("order_id",), "cod_remittance": ("order_id", "awb")}
+# More blank IDs than this in one file points at a wrong mapping, not at a few lines to review: reject them.
+MAX_MISSING_ID_SHARE = 0.2
+
+
+def _missing_id_rows(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | None]) -> pl.Series | None:
+    """Rows whose identifying cells are all blank, when they may go to the review queue; otherwise None."""
+    id_fields = QUEUE_ID_FIELDS.get(file_kind)
+    order_column = columns.get("order_id")
+    if not id_fields or not order_column or order_column not in frame.columns or frame.height == 0:
+        return None
+    blank = pl.Series([True] * frame.height)
+    for name in id_fields:
+        header = columns.get(name)
+        if header and header in frame.columns:
+            raw = frame.get_column(header).str.strip_chars()
+            blank = blank & (raw.is_null() | (raw == ""))
+    if blank.sum() / frame.height > MAX_MISSING_ID_SHARE:
+        return None
+    return blank
+
+
 def apply_mapping(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | None]) -> ParseResult:
     """Convert the mapped source columns into canonical typed columns and validate every row.
 
@@ -220,6 +245,7 @@ def apply_mapping(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | 
     typed: dict[str, pl.Series] = {ROW_NUMBER: row_numbers}
     problems: list[pl.Series] = []  # per field: message or null, one entry per row
     cell_errors: dict[str, list[tuple[int, str]]] = {}
+    missing_id = _missing_id_rows(frame, file_kind, columns)
 
     for spec in specs:
         header = columns.get(spec.name)
@@ -242,7 +268,8 @@ def apply_mapping(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | 
             pl.when(failed)
             .then(pl.lit(f"{spec.label}: '") + raw.str.slice(0, 40) + pl.lit(f"' is not {TYPE_LABEL.get(spec.type, 'valid')}"))
         )
-        if spec.required:
+        # A blank order ID is not an error when the line can wait in the review queue instead.
+        if spec.required and not (missing_id is not None and spec.name == "order_id"):
             message = message.when(is_blank).then(pl.lit(f"{spec.label} is empty"))
         field_problem = pl.select(message.otherwise(None)).to_series()
         problems.append(field_problem)
@@ -257,6 +284,8 @@ def apply_mapping(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | 
     if one_of:
         labels = " or ".join(next(spec.label for spec in specs if spec.name == name) for name in one_of)
         missing_all = pl.all_horizontal([result_frame.get_column(name).is_null() for name in one_of])
+        if missing_id is not None:
+            missing_all = missing_all & ~missing_id
         problems.append(pl.select(pl.when(missing_all).then(pl.lit(f"{labels} is required")).otherwise(None)).to_series())
 
     if problems:
@@ -270,4 +299,12 @@ def apply_mapping(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | 
     bad = reasons.is_not_null()
     rejected_frame = pl.DataFrame({"row": row_numbers, "reason": reasons}).filter(bad)
     rejected = list(zip(rejected_frame["row"].to_list(), rejected_frame["reason"].to_list()))
-    return ParseResult(rows=result_frame.filter(~bad), rejected=rejected, cell_errors=cell_errors, all_rows=result_frame)
+    if missing_id is None:
+        return ParseResult(rows=result_frame.filter(~bad), rejected=rejected, cell_errors=cell_errors, all_rows=result_frame)
+    return ParseResult(
+        rows=result_frame.filter(~bad & ~missing_id),
+        rejected=rejected,
+        unmatched=result_frame.filter(~bad & missing_id),
+        cell_errors=cell_errors,
+        all_rows=result_frame,
+    )

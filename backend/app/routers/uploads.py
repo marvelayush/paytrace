@@ -126,6 +126,7 @@ def upload_out(db: Session, upload: Upload) -> UploadOut:
         rows_ok=upload.rows_ok,
         rows_rejected=upload.rows_rejected,
         rows_duplicate=upload.rows_duplicate,
+        rows_unmatched=upload.rows_unmatched,
         status=upload.status,
         error=upload.error,
         uploaded_by_name=uploader,

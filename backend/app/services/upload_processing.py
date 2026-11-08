@@ -32,6 +32,7 @@ def process_file(db: Session, source: Source, mapping: ColumnMapping, path: Path
         upload.row_count = parsed.total
         upload.rows_ok = result.rows_ok
         upload.rows_duplicate = result.rows_duplicate
+        upload.rows_unmatched = result.rows_unmatched
         upload.rows_rejected = len(rejected)
         upload.status = "done"
     except FileReadError as error:

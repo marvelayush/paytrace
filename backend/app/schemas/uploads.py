@@ -104,6 +104,7 @@ class UploadOut(BaseModel):
     rows_ok: int
     rows_rejected: int
     rows_duplicate: int
+    rows_unmatched: int = 0
     status: str
     error: str | None
     uploaded_by_name: str | None

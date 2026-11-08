@@ -27,6 +27,12 @@ class IngestResult:
     rows_ok: int
     rows_duplicate: int
     rejected: list[tuple[int, str]]
+    rows_unmatched: int = 0  # lines with no order ID, now waiting in the review queue
+
+# The canonical values that identify a line, per kind. The md5 of these is the line hash; a queued line
+# accepted later is written to the ledger with the same hash as if the partner had sent the order ID.
+SETTLEMENT_HASH_COLUMNS = ["order_id", "settlement_date", "gross", "commission", "fees", "tcs", "tds", "net", "reference"]
+COD_HASH_COLUMNS = ["order_id", "awb", "remittance_date", "amount", "utr"]
 
 
 def _driver_connection(db: Session):
@@ -137,6 +143,34 @@ def _ingest_lines(
     return IngestResult(rows_ok=inserted, rows_duplicate=staged.height - inserted, rejected=rejected)
 
 
+def _queue_unmatched(db: Session, upload_id: int, source: Source, rows: pl.DataFrame) -> tuple[int, list[tuple[int, str]]]:
+    """Store lines without an order ID in the review queue. Returns (lines queued, in-file duplicates)."""
+    if source.file_kind == "settlement":
+        key = _hash_key(SETTLEMENT_HASH_COLUMNS)
+        rows = rows.with_columns(pl.col(name).fill_null(0) for name in ("gross", "commission", "fees", "tcs", "tds"))
+        values = [
+            pl.col("settlement_date").alias("line_date"), pl.col("gross").alias("gross_paise"),
+            pl.col("commission").alias("commission_paise"), pl.col("fees").alias("fees_paise"), pl.col("tcs").alias("tcs_paise"),
+            pl.col("tds").alias("tds_paise"), pl.col("net").alias("amount_paise"), pl.lit(None, pl.String).alias("awb"),
+            pl.col("reference"),
+        ]
+    else:
+        key = _hash_key(COD_HASH_COLUMNS)
+        values = [pl.col("remittance_date").alias("line_date"), pl.col("amount").alias("amount_paise"), pl.col("awb"), pl.col("utr").alias("reference")]
+    rows, duplicates = _split_in_file_duplicates(rows, key)
+    staged = rows.select(
+        pl.lit(upload_id).alias("upload_id"),
+        pl.lit(source.partner_id).alias("partner_id"),
+        pl.lit(source.file_kind).alias("kind"),
+        pl.col(ROW_NUMBER).cast(pl.Int32).alias("row_number"),
+        *values,
+        key,
+    )
+    columns = [name for name in staged.columns if name != HASH_KEY]
+    queued = _stage_and_insert(db, "unmatched_lines", staged, columns, "(partner_id, kind, line_hash)")
+    return queued, duplicates
+
+
 def ingest(db: Session, upload_id: int, source: Source, parsed: ParseResult) -> IngestResult:
     """Write the parsed rows of one upload. Runs inside the caller's transaction."""
     rows = parsed.rows
@@ -150,12 +184,10 @@ def ingest(db: Session, upload_id: int, source: Source, parsed: ParseResult) -> 
             ("net", "net_paise"), ("reference", "raw_ref"))]
         # Missing money columns count as zero (e.g. a gateway report has no commission or TCS).
         rows = rows.with_columns(pl.col(name).fill_null(0) for name in ("gross", "commission", "fees", "tcs", "tds"))
-        result = _ingest_lines(db, "settlement_lines", rows, upload_id, "partner_id", source.partner_id, selected,
-                               ["order_id", "settlement_date", "gross", "commission", "fees", "tcs", "tds", "net", "reference"])
+        result = _ingest_lines(db, "settlement_lines", rows, upload_id, "partner_id", source.partner_id, selected, SETTLEMENT_HASH_COLUMNS)
     elif kind == "cod_remittance":
         selected = [pl.col("order_id"), pl.col("awb"), pl.col("remittance_date"), pl.col("amount").alias("amount_paise"), pl.col("utr")]
-        result = _ingest_lines(db, "cod_remittances", rows, upload_id, "courier_partner_id", source.partner_id, selected,
-                               ["order_id", "awb", "remittance_date", "amount", "utr"])
+        result = _ingest_lines(db, "cod_remittances", rows, upload_id, "courier_partner_id", source.partner_id, selected, COD_HASH_COLUMNS)
     elif kind == "freight_invoice":
         rows = rows.with_columns(pl.col("cod_fee").fill_null(0))
         selected = [pl.col("order_id"), pl.col("awb"), pl.col("charged_weight").alias("charged_weight_g"), pl.col("leg"),
@@ -172,4 +204,9 @@ def ingest(db: Session, upload_id: int, source: Source, parsed: ParseResult) -> 
                                ["order_id", "awb", "received_at"])
     else:
         raise ValueError(f"Unknown file kind {kind}")
+    if parsed.unmatched is not None and parsed.unmatched.height:
+        queued, duplicates = _queue_unmatched(db, upload_id, source, parsed.unmatched)
+        result.rows_unmatched = queued
+        result.rows_duplicate += parsed.unmatched.height - len(duplicates) - queued
+        result.rejected = result.rejected + duplicates
     return result
