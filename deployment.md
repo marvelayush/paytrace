@@ -1,5 +1,11 @@
 # Deploying PayTrace
 
+| | |
+|---|---|
+| GitHub repository | `https://github.com/<your-user>/paytrace`  ← replace after pushing |
+| Live app | `https://<your-project>.vercel.app`  ← replace after deploying |
+| Backend health | `https://<your-service>.onrender.com/health`  ← replace after deploying |
+
 Three free-tier services: **Neon** (Postgres), **Render** (FastAPI backend), **Vercel** (Next.js frontend).
 Everything below is clicks and copy-paste. Nothing secret is stored in the repository.
 
@@ -22,6 +28,53 @@ The backend runs on Render's free plan, which **sleeps after 15 minutes without 
 These are set when the database is seeded (step 2). They are demo credentials meant to be shared with reviewers. Change them by re-running the seed with other values.
 
 ---
+
+## Run it locally (step by step)
+
+Requirements: Docker, Python 3.11+, Node 20+.
+
+1. `cp .env.example .env` and fill in `JWT_SECRET` (32+ random characters), `DEMO_FINANCE_PASSWORD`, `DEMO_FOUNDER_PASSWORD`, and optionally `GEMINI_API_KEY`.
+2. Create `frontend/.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000` and `NEXT_PUBLIC_DEMO_MODE=true`.
+3. `docker compose up -d` starts Postgres 16, plus the `paytrace_test` database for pytest.
+4. Backend:
+   ```bash
+   cd backend
+   python -m venv .venv
+   .venv/Scripts/activate            # macOS/Linux: source .venv/bin/activate
+   pip install -r requirements-dev.txt
+   alembic upgrade head
+   python ../scripts/seed.py --reset
+   uvicorn app.main:app --reload --port 8000
+   ```
+5. Frontend, in a second terminal: `cd frontend && npm install && npm run dev`, then open http://localhost:3000.
+6. Sign in with the demo emails below and the passwords you put in `.env`.
+
+To try proxy mode locally, build from PowerShell (Git Bash rewrites `/api` into a Windows path):
+`$env:NEXT_PUBLIC_API_URL='/api'; $env:BACKEND_URL='http://localhost:8000'; npm run build; npx next start`.
+
+## Environment variables (names only)
+
+| Name | Where | Purpose |
+|---|---|---|
+| `DATABASE_URL` | backend | Postgres connection string (Neon direct connection in production) |
+| `TEST_DATABASE_URL` | backend tests | Optional; defaults to the local `paytrace_test` database |
+| `JWT_SECRET` | backend | Signs session tokens (Render generates one) |
+| `JWT_EXPIRE_MINUTES` | backend | Session length (default 8 hours) |
+| `COOKIE_SECURE`, `COOKIE_SAMESITE` | backend | Session cookie flags |
+| `FORWARDED_HOPS` | backend | Trusted proxies in front of the API, for the login rate limit |
+| `FRONTEND_ORIGIN` | backend | Allowed CORS origin(s) |
+| `ENABLE_DOCS` | backend | Turns the `/docs` page on or off |
+| `MAX_UPLOAD_MB`, `UPLOAD_DIR` | backend | Upload size limit and where files wait while being processed |
+| `RETURN_RECEIPT_DAYS` | backend | Days a return has to be scanned in (A8) |
+| `GEMINI_API_KEY`, `GEMINI_MODEL`, `GEMINI_THINKING_LEVEL` | backend | AI column mapping (optional; fuzzy fallback without a key) |
+| `DEMO_FINANCE_PASSWORD`, `DEMO_FOUNDER_PASSWORD` | seed script | Demo account passwords |
+| `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_DB` | docker-compose | Local database only |
+| `NEXT_PUBLIC_API_URL` | frontend | `/api` in proxy mode, or the backend URL in direct mode |
+| `BACKEND_URL` | frontend | Proxy mode: where `/api/*` is forwarded |
+| `NEXT_PUBLIC_DEMO_MODE` | frontend | Shows the demo-account hint on the login screen |
+| `NEXT_PUBLIC_MAX_UPLOAD_MB` | frontend | Largest file the browser sends (default 4 in proxy mode) |
+
+The same names, with no values, are in `.env.example`.
 
 ## 0. GitHub: the repository must be public
 
@@ -110,7 +163,7 @@ Uploads then go straight to the backend, up to 50 MB. *Direct mode without a sha
 - [ ] The GitHub repository is **public** and opens without signing in
 - [ ] `/health` returns ok
 - [ ] Sign in as finance on a phone or in Safari: the session survives a page reload
-- [ ] The dashboard shows about ₹5.43 L at risk across 7 partners
+- [ ] The dashboard shows about ₹5.8 L at risk across 7 partners. The figure rises slightly over the first weeks as not-yet-due orders pass their due date.
 - [ ] Orders → search `88120` → the drawer shows expected ₹899, received ₹862, −₹37
 - [ ] Uploads → Marketplace 1 · Settlement → upload `sample_data/format_changed/marketplace1_settlement_NEW_FORMAT.csv` → the mapping review shows "AI suggested these columns" → approve. If it says "AI unavailable", check `GEMINI_API_KEY` in Render.
 - [ ] Claims → a claim → **PDF summary** downloads
