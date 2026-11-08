@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 from sqlalchemy import func, select
 
-from app.models import AuditLog, ColumnMapping, Order, SettlementLine, Source, Partner, UploadRowError
+from app.models import AuditLog, ColumnMapping, Order, Partner, SettlementLine, Source, UnmatchedLine, UploadRowError
 from app.sample_data.formats import FORMAT_CHANGED, FORMATS
 from app.services.seeding import seed_initial_mappings, seed_reference_data
 
@@ -49,8 +49,12 @@ def test_known_layout_is_reused_and_processed(finance_client, db, seeded):
     assert processed.status_code == 200
     upload = processed.json()["upload"]
     lines_in_file = sample_bytes("marketplace2_settlement.csv").decode().count("\n") - 1
-    assert (upload["status"], upload["rows_ok"], upload["rows_rejected"]) == ("done", lines_in_file, 0)
-    assert db.scalar(select(func.count()).select_from(SettlementLine)) == lines_in_file
+    # A few lines carry no order ID: they wait in the review queue instead of being saved or rejected.
+    assert (upload["status"], upload["rows_rejected"]) == ("done", 0)
+    assert upload["rows_unmatched"] > 0
+    assert upload["rows_ok"] + upload["rows_unmatched"] == lines_in_file
+    assert db.scalar(select(func.count()).select_from(SettlementLine)) == upload["rows_ok"]
+    assert db.scalar(select(func.count()).select_from(UnmatchedLine)) == upload["rows_unmatched"]
 
 
 def test_uploading_the_same_report_twice_does_not_double_count(finance_client, db, seeded):
@@ -60,8 +64,9 @@ def test_uploading_the_same_report_twice_does_not_double_count(finance_client, d
         body = inspect(finance_client, source, "quickcom2_payouts.csv", content).json()
         result = finance_client.post(f"/uploads/{body['token']}/process", json={"mapping_id": body["active_mapping"]["id"]}).json()
     lines = content.decode().count("\n") - 1
-    assert (result["upload"]["rows_ok"], result["upload"]["rows_duplicate"]) == (0, lines)
-    assert db.scalar(select(func.count()).select_from(SettlementLine)) == lines
+    assert (result["upload"]["rows_ok"], result["upload"]["rows_unmatched"], result["upload"]["rows_duplicate"]) == (0, 0, lines)
+    queued = db.scalar(select(func.count()).select_from(UnmatchedLine))
+    assert db.scalar(select(func.count()).select_from(SettlementLine)) + queued == lines
 
 
 def test_changed_layout_needs_review_then_approval_creates_version_2(finance_client, db, seeded):
@@ -206,4 +211,4 @@ def test_every_sample_file_processes_without_rejections(finance_client, db, seed
     upload = finance_client.post(f"/uploads/{body['token']}/process", json={"mapping_id": body["active_mapping"]["id"]}).json()["upload"]
     assert upload["status"] == "done"
     assert upload["rows_rejected"] == 0
-    assert upload["rows_ok"] == upload["row_count"] > 0
+    assert upload["rows_ok"] + upload["rows_unmatched"] == upload["row_count"] > 0
