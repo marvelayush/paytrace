@@ -36,3 +36,5 @@ services:
         value: "false"
       - key: UPLOAD_DIR
         value: /tmp/paytrace-uploads
+      - key: POLARS_MAX_THREADS
+        value: "2" # Polars sizes its thread pool to the host's cores; capping it keeps memory well inside the free plan's 512 MB
