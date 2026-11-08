@@ -5,7 +5,7 @@
 | | |
 |---|---|
 | Live demo | see [deployment.md](deployment.md) (demo accounts listed there) |
-| Spec | [CLAUDE.md](CLAUDE.md) |
+| Spec | [docs/SPEC.md](docs/SPEC.md) |
 | Assumptions (A1–A39) | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) |
 | Design decisions | [docs/DECISIONS.md](docs/DECISIONS.md) |
 | Benchmark | [docs/BENCHMARK.md](docs/BENCHMARK.md): **1 lakh orders end to end in 18 s** |

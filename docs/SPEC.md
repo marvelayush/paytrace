@@ -87,7 +87,6 @@ Keep docs/ASSUMPTIONS.md updated whenever you make a new assumption. Use IDs (A1
 
 ```
 paytrace/
-  CLAUDE.md
   README.md
   docker-compose.yml
   .env.example                # names only, no values
@@ -122,6 +121,7 @@ paytrace/
     seed.py
   sample_data/                # generated small demo files committed; big benchmark files gitignored
   docs/
+    SPEC.md                   # this file
     ASSUMPTIONS.md
     DECISIONS.md              # short log of design decisions and why
     BENCHMARK.md              # benchmark results
