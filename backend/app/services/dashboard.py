@@ -3,9 +3,12 @@
 from sqlalchemy import func, select, text
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models import Claim, Partner, ReconRun
 from app.services.matching import FLAGGED_STATUSES
 from app.services.results import AGE_BUCKETS
+from app.services.returns import returns_summary
+from app.services.review_queue import queue_counts
 
 
 def dashboard(db: Session) -> dict:
@@ -88,4 +91,6 @@ def dashboard(db: Session) -> dict:
         "bucket_totals": bucket_totals,
         "by_status": by_status,
         "tax_by_partner": tax_by_partner,
+        "returns": returns_summary(db, get_settings().return_receipt_days),
+        "review_queue": queue_counts(db),
     }
