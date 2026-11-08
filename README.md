@@ -4,12 +4,19 @@
 
 | | |
 |---|---|
-| Live demo | see [deployment.md](deployment.md) (demo accounts listed there) |
+| Live demo | _live link: add after deploying_ (demo accounts in [deployment.md](deployment.md)) |
 | Spec | [docs/SPEC.md](docs/SPEC.md) |
-| Assumptions (A1–A39) | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) |
+| Assumptions (A1–A41) | [docs/ASSUMPTIONS.md](docs/ASSUMPTIONS.md) |
 | Design decisions | [docs/DECISIONS.md](docs/DECISIONS.md) |
 | Benchmark | [docs/BENCHMARK.md](docs/BENCHMARK.md): **1 lakh orders end to end in 18 s** |
+| Tools used | [docs/TOOLS.md](docs/TOOLS.md) |
+| How I used AI | [docs/AI_USAGE.md](docs/AI_USAGE.md) |
 | Milestone log | [docs/PROGRESS.md](docs/PROGRESS.md) |
+| Deploying | [deployment.md](deployment.md) |
+
+## Screenshots
+
+_To be added: dashboard (money at risk), orders with the detail drawer, mapping review, claims._
 
 ## What it does
 
@@ -25,6 +32,8 @@ The brief's three sample orders reproduce exactly: ORD-W-204118 expected ₹1,40
 
 ## Stack
 
+Full list with what each tool is used for: [docs/TOOLS.md](docs/TOOLS.md).
+
 FastAPI · SQLAlchemy 2 · Alembic · PostgreSQL 16 · **Polars** (parsing and matching) · psycopg 3 `COPY` · rapidfuzz · Gemini (optional) · fpdf2 · Next.js 16 · TypeScript · Tailwind 4 · shadcn/ui · TanStack Query / Table / Virtual
 
 ```
@@ -38,7 +47,7 @@ backend/app/services/
   evidence_export.py  claim CSV + PDF
   pii.py              masking
 frontend/components/  dashboard, orders (virtualised table + drawer), claims, uploads (mapping review), rate cards
-scripts/              generate_sample_data.py, seed.py, benchmark_matching.py
+scripts/              generate_sample_data.py, seed.py, benchmark_matching.py, eval_ai_mapping.py
 sample_data/          one realistic month: 15 partner reports in their own layouts + a "format changed" file
 ```
 
@@ -81,7 +90,7 @@ Sign in as `finance@paytrace.demo` or `founder@paytrace.demo` with the passwords
 
 ```bash
 cd backend
-pytest              # 287 tests, about 5 minutes (needs the docker-compose database)
+pytest              # 297 tests, about 5 minutes (needs the docker-compose database)
 pytest -m slow      # the 1-lakh-row benchmark as a test: under 60 s required
 ```
 
