@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsUpDown, Keyboard, LoaderCircle, LogOut, Moon, Search, Sun } from "lucide-react";
+import { ChevronsUpDown, Ellipsis, Keyboard, LoaderCircle, LogOut, Moon, Search, Sun } from "lucide-react";
 import dynamic from "next/dynamic";
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
@@ -17,9 +17,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ROLE_LABELS, type User, useLogout } from "@/lib/auth";
-import { isActive, navItemsFor } from "@/lib/nav";
+import { formatCount } from "@/lib/format";
+import { isActive, type NavItem, navItemsFor } from "@/lib/nav";
+import { useReviewCounts } from "@/lib/review";
 import { toggleTheme, useTheme } from "@/lib/theme";
 import { closeOverlay, isTyping, openOverlay, useModKey, useOverlay } from "@/lib/ui-store";
 import { cn } from "@/lib/utils";
@@ -70,8 +73,24 @@ function Avatar({ user, className }: { user: User; className?: string }) {
   );
 }
 
+/** Open lines in the review queue, shown next to its nav item. */
+function useNavBadges(): Record<string, number | undefined> {
+  const counts = useReviewCounts();
+  return { "/review": counts.data?.open || undefined };
+}
+
+function Badge({ count, className }: { count: number | undefined; className?: string }) {
+  if (!count) return null;
+  return (
+    <span className={cn("money rounded-full bg-attention-soft px-1.5 text-[11px] leading-5 font-medium text-attention ring-1 ring-attention/25 ring-inset", className)}>
+      {formatCount(count)}
+    </span>
+  );
+}
+
 function SidebarNav({ user }: { user: User }) {
   const pathname = usePathname();
+  const badges = useNavBadges();
   return (
     <nav aria-label="Main" className="flex flex-col gap-0.5">
       {navItemsFor(user.role).map((item) => {
@@ -90,7 +109,9 @@ function SidebarNav({ user }: { user: User }) {
             )}
           >
             <item.icon className="size-4 shrink-0" aria-hidden />
-            {item.label}
+            <span className="flex-1">{item.label}</span>
+            <Badge count={badges[item.href]} />
+            {badges[item.href] ? <span className="sr-only"> ({badges[item.href]} open)</span> : null}
           </Link>
         );
       })}
@@ -98,36 +119,90 @@ function SidebarNav({ user }: { user: User }) {
   );
 }
 
-/** Mobile: the main screens as a bottom bar, thumb-reachable, 56px tall plus the safe area. */
+const BOTTOM_ITEM = "relative flex h-14 w-full flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors duration-150";
+
+/** Mobile: the main screens as a bottom bar, thumb-reachable, 56px tall plus the safe area. The rest open from "More". */
 function BottomNav({ user }: { user: User }) {
   const pathname = usePathname();
+  const badges = useNavBadges();
+  const [moreOpen, setMoreOpen] = useState(false);
+  const items = navItemsFor(user.role);
+  const primary = items.filter((item) => item.primary);
+  const more = items.filter((item) => !item.primary);
+  const moreActive = more.some((item) => isActive(pathname, item.href));
   return (
     <nav
       aria-label="Main"
       className="fixed inset-x-0 bottom-0 z-30 border-t bg-card/95 pb-[env(safe-area-inset-bottom)] backdrop-blur lg:hidden"
     >
       <ul className="mx-auto flex max-w-lg">
-        {navItemsFor(user.role).map((item) => {
+        {primary.map((item) => {
           const active = isActive(pathname, item.href);
           return (
             <li key={item.href} className="flex-1">
               <Link
                 href={item.href}
                 aria-current={active ? "page" : undefined}
-                className={cn(
-                  "flex h-14 flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors duration-150",
-                  FOCUS,
-                  active ? "text-primary" : "text-muted-foreground hover:text-foreground",
-                )}
+                className={cn(BOTTOM_ITEM, FOCUS, active ? "text-primary" : "text-muted-foreground hover:text-foreground")}
               >
                 <item.icon className="size-5" aria-hidden strokeWidth={active ? 2.25 : 2} />
                 {item.short}
+                <Badge count={badges[item.href]} className="absolute top-1.5 left-1/2 ml-2" />
               </Link>
             </li>
           );
         })}
+        {more.length > 0 && (
+          <li className="flex-1">
+            <button
+              type="button"
+              onClick={() => setMoreOpen(true)}
+              aria-haspopup="dialog"
+              className={cn(BOTTOM_ITEM, FOCUS, moreActive ? "text-primary" : "text-muted-foreground hover:text-foreground")}
+            >
+              <Ellipsis className="size-5" aria-hidden />
+              More
+            </button>
+          </li>
+        )}
       </ul>
+      <MoreSheet items={more} open={moreOpen} onOpenChange={setMoreOpen} pathname={pathname} />
     </nav>
+  );
+}
+
+function MoreSheet({ items, open, onOpenChange, pathname }: { items: NavItem[]; open: boolean; onOpenChange: (open: boolean) => void; pathname: string }) {
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent side="bottom" className="gap-0 rounded-t-2xl pb-[env(safe-area-inset-bottom)]">
+        <SheetHeader className="border-b px-5 py-4">
+          <SheetTitle>More</SheetTitle>
+          <SheetDescription className="sr-only">Other screens</SheetDescription>
+        </SheetHeader>
+        <ul className="p-2">
+          {items.map((item) => {
+            const active = isActive(pathname, item.href);
+            return (
+              <li key={item.href}>
+                <Link
+                  href={item.href}
+                  onClick={() => onOpenChange(false)}
+                  aria-current={active ? "page" : undefined}
+                  className={cn(
+                    "flex h-12 items-center gap-3 rounded-lg px-3 text-sm font-medium",
+                    FOCUS,
+                    active ? "bg-sidebar-accent text-sidebar-accent-foreground" : "hover:bg-accent",
+                  )}
+                >
+                  <item.icon className="size-5 text-muted-foreground" aria-hidden />
+                  {item.label}
+                </Link>
+              </li>
+            );
+          })}
+        </ul>
+      </SheetContent>
+    </Sheet>
   );
 }
 

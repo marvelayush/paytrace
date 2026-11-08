@@ -1,4 +1,4 @@
-import { FileWarning, LayoutDashboard, ListChecks, type LucideIcon, Percent, Upload } from "lucide-react";
+import { FileWarning, Inbox, LayoutDashboard, ListChecks, type LucideIcon, PackageOpen, Percent, Upload } from "lucide-react";
 
 import type { Role } from "@/lib/auth";
 
@@ -10,6 +10,8 @@ export type NavItem = {
   icon: LucideIcon;
   /** Roles that see this item. Co-founders never see screens they cannot use (A2). */
   roles: Role[];
+  /** Shown in the phone's bottom bar; the rest sit behind "More" so each target stays thumb-sized. */
+  primary?: boolean;
 };
 
 /**
@@ -17,9 +19,11 @@ export type NavItem = {
  * so the sidebar never links to a placeholder page.
  */
 export const NAV_ITEMS: NavItem[] = [
-  { href: "/", label: "Money at risk", short: "At risk", icon: LayoutDashboard, roles: ["finance_exec", "cofounder"] },
-  { href: "/orders", label: "Orders", short: "Orders", icon: ListChecks, roles: ["finance_exec", "cofounder"] },
-  { href: "/claims", label: "Claims", short: "Claims", icon: FileWarning, roles: ["finance_exec", "cofounder"] },
+  { href: "/", label: "Money at risk", short: "At risk", icon: LayoutDashboard, roles: ["finance_exec", "cofounder"], primary: true },
+  { href: "/orders", label: "Orders", short: "Orders", icon: ListChecks, roles: ["finance_exec", "cofounder"], primary: true },
+  { href: "/review", label: "Review queue", short: "Review", icon: Inbox, roles: ["finance_exec", "cofounder"], primary: true },
+  { href: "/claims", label: "Claims", short: "Claims", icon: FileWarning, roles: ["finance_exec", "cofounder"], primary: true },
+  { href: "/returns", label: "Returns", short: "Returns", icon: PackageOpen, roles: ["finance_exec", "cofounder"] },
   { href: "/uploads", label: "Uploads", short: "Uploads", icon: Upload, roles: ["finance_exec"] },
   { href: "/rate-cards", label: "Rate cards", short: "Rates", icon: Percent, roles: ["finance_exec", "cofounder"] },
 ];
