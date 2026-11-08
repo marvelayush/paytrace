@@ -37,6 +37,11 @@
   },
   "leakage_rupees": 583606.37,
   "leakage_share_of_value": 0.0163,
+  "lines_without_order_id": {
+    "settlement": 52,
+    "cod_remittance": 30,
+    "ambiguous": 6
+  },
   "files": [
     "courierA_cod_remittance.csv",
     "courierA_freight_invoice.csv",

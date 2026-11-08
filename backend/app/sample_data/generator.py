@@ -10,6 +10,7 @@ Customers are invented. No real person's data is used anywhere.
 
 import math
 import random
+from collections import Counter, defaultdict
 from dataclasses import dataclass, field
 from datetime import date, datetime, time, timedelta
 
@@ -71,6 +72,8 @@ class SampleData:
     receipts: list[dict] = field(default_factory=list)
     # (order_id, leak_type, amount_paise)
     injected: list[tuple[str, str, int]] = field(default_factory=list)
+    # Lines sent without an order ID (review queue): {kind, partner, order_id (the truth), ambiguous}
+    missing_ids: list[dict] = field(default_factory=list)
 
     @property
     def order_value_paise(self) -> int:
@@ -100,8 +103,9 @@ COURIERS = {name: _courier_terms(name) for name in COURIER_RATE_CARDS}
 
 
 class _Generator:
-    def __init__(self, n_orders: int, seed: int, start: date, days: int) -> None:
+    def __init__(self, n_orders: int, seed: int, start: date, days: int, number_offset: int = 0) -> None:
         self.rng = random.Random(seed)
+        self.number_offset = number_offset  # shifts order numbers and AWBs, for extra batches that must not collide
         self.n_orders = n_orders
         self.start = start
         self.days = days
@@ -149,7 +153,8 @@ class _Generator:
         for channel, count in counts.items():
             prefix, base = ORDER_ID_PREFIX[channel]
             for index in range(count):
-                self._make_order(channel, f"{prefix}{base + index}", base + index)
+                number = base + self.number_offset + index
+                self._make_order(channel, f"{prefix}{number}", number)
         return self.data
 
     def _channel_counts(self) -> dict[str, int]:
@@ -395,12 +400,26 @@ def generate(
     start: date = date(2026, 9, 21),
     days: int = 30,
     include_brief_samples: bool = True,
+    missing_id_share: float = 0.0,
+    ambiguous_pairs: int = 0,
+    number_offset: int = 0,
 ) -> SampleData:
-    """A month of orders (default 21 Sep – 20 Oct 2026) with every partner's lines and injected leakage."""
-    data = _Generator(n_orders, seed, start, days).build()
-    if not include_brief_samples:
-        return data
+    """A month of orders (default 21 Sep – 20 Oct 2026) with every partner's lines and injected leakage.
 
+    `missing_id_share` > 0 sends that share of marketplace / quick-commerce settlement lines and courier COD
+    lines without an order ID (and without the AWB), plus `ambiguous_pairs` pairs of look-alike lines, for the
+    review queue. Off by default, so tests and the benchmark see every line with its ID.
+    """
+    data = _Generator(n_orders, seed, start, days, number_offset).build()
+    if include_brief_samples:
+        _add_brief_samples(data)
+    if missing_id_share > 0 or ambiguous_pairs > 0:
+        _strip_order_ids(data, missing_id_share, ambiguous_pairs, random.Random(seed + 7))
+    return data
+
+
+def _add_brief_samples(data: SampleData) -> None:
+    """Replace three generated orders with the brief's sample orders, exactly."""
     orders, settlements, freight, receipts, injected = _brief_orders()
     ids = set(BRIEF_ORDER_IDS)
     # A brief ID outside the generated range (small runs) would add an extra order: drop the last
@@ -423,4 +442,38 @@ def generate(
     data.freight_lines = [line for line in data.freight_lines if not belongs_to_replaced(line)] + freight
     data.receipts = [line for line in data.receipts if not belongs_to_replaced(line)] + receipts
     data.injected = [leak for leak in data.injected if leak[0] not in ids] + injected
-    return data
+
+
+def _strip_order_ids(data: SampleData, share: float, ambiguous_pairs: int, rng: random.Random) -> None:
+    """Blank the order ID (and AWB) on some paid lines, as partners sometimes send them."""
+    protected = set(BRIEF_ORDER_IDS) | {order_id for order_id, _, _ in data.injected}
+    orders = {order["order_id"]: order for order in data.orders}
+    lines_per_order = Counter(line["order_id"] for line in data.settlements)
+    # Single-line payouts only: a split payment with one line missing would be a different story.
+    settlement = [line for line in data.settlements if line["partner"] != "Website" and line["order_id"] not in protected
+                  and lines_per_order[line["order_id"]] == 1 and orders[line["order_id"]]["delivery_status"] == "delivered"]
+    cod = [line for line in data.cod_remittances if line["order_id"] and line["order_id"] not in protected]
+
+    chosen: list[tuple[str, dict, bool]] = []
+    # Look-alike pairs: same partner and sale value, delivered on the same day. Their lines differ only in date.
+    by_look = defaultdict(list)
+    for line in settlement:
+        by_look[(line["partner"], line["gross"], orders[line["order_id"]]["delivered_date"])].append(line)
+    pairs = [group[:2] for _, group in sorted(by_look.items(), key=lambda item: str(item[0])) if len(group) >= 2]
+    rng.shuffle(pairs)
+    for pair in pairs[:ambiguous_pairs]:
+        chosen += [("settlement", line, True) for line in pair]
+    taken = {id(line) for _, line, _ in chosen}
+    pool = [line for line in settlement if id(line) not in taken]
+    chosen += [("settlement", line, False) for line in rng.sample(pool, min(len(pool), round(len(pool) * share)))]
+    chosen += [("cod_remittance", line, False) for line in rng.sample(cod, min(len(cod), round(len(cod) * share * 2)))]
+
+    for kind, line, ambiguous in chosen:
+        partner = line["partner"] if kind == "settlement" else line["courier"]
+        data.missing_ids.append({"kind": kind, "partner": partner, "order_id": line["order_id"], "ambiguous": ambiguous})
+        line["order_id"] = None
+        if kind == "settlement":
+            # The partner's own reference, not derived from our order number (otherwise the match would be trivial).
+            line["reference"] = f"{partner[:2].upper()}{partner[-1]}-U{rng.randint(100_000, 999_999)}"
+        else:
+            line["awb"] = None

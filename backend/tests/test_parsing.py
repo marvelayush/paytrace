@@ -110,7 +110,10 @@ def test_every_sample_file_parses_cleanly_with_its_mapping(layout):
     frame = read_table(folder / layout.filename)
     result = apply_mapping(frame, layout.file_kind, layout.mapping()["columns"])
     assert result.rejected == []
-    assert result.rows.height == frame.height > 0
+    # Lines without an order ID are not rejected: they wait in the review queue.
+    unmatched = result.unmatched.height if result.unmatched is not None else 0
+    assert result.rows.height + unmatched == frame.height > 0
+    assert unmatched < 0.01 * frame.height
 
 
 def test_brief_rows_parse_to_exact_values():

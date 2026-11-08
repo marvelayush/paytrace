@@ -23,13 +23,15 @@ from app.sample_data.generator import generate  # noqa: E402
 
 
 def main() -> None:
+    sys.stdout.reconfigure(encoding="utf-8")  # the summary prints ₹, which the Windows console code page cannot
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--orders", type=int, default=30_000, help="number of orders (default 30,000)")
     parser.add_argument("--seed", type=int, default=20261001, help="random seed, for repeatable files")
     parser.add_argument("--out", type=Path, default=REPO_ROOT / "sample_data", help="output folder")
     args = parser.parse_args()
 
-    data = generate(n_orders=args.orders, seed=args.seed)
+    # About 0.2% of partner lines arrive without an order ID (review queue), three pairs of them look alike.
+    data = generate(n_orders=args.orders, seed=args.seed, missing_id_share=0.003, ambiguous_pairs=3)
     paths = write_all(data, args.out)
 
     leaks_by_type: dict[str, list[int]] = defaultdict(list)
@@ -48,6 +50,11 @@ def main() -> None:
         },
         "leakage_rupees": round(data.leak_value_paise / 100, 2),
         "leakage_share_of_value": round(leak_share, 4),
+        "lines_without_order_id": {
+            "settlement": sum(1 for line in data.missing_ids if line["kind"] == "settlement"),
+            "cod_remittance": sum(1 for line in data.missing_ids if line["kind"] == "cod_remittance"),
+            "ambiguous": sum(1 for line in data.missing_ids if line["ambiguous"]),
+        },
         "files": sorted(str(path.relative_to(args.out)).replace("\\", "/") for path in paths),
     }
     (args.out / "manifest.json").write_text(json.dumps(manifest, indent=2, ensure_ascii=False) + "\n", encoding="utf-8")
@@ -56,6 +63,7 @@ def main() -> None:
     for leak_type, info in manifest["injected_leakage"].items():
         print(f"  {leak_type:<20} {info['orders']:>5} orders  ₹{info['rupees']:>12,.2f}")
     print(f"  total leakage ₹{data.leak_value_paise / 100:,.0f} = {leak_share:.2%} of order value")
+    print(f"  lines without an order ID (review queue): {len(data.missing_ids)}")
     print(f"Wrote {len(paths)} files to {args.out}")
 
 
