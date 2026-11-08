@@ -111,7 +111,7 @@ backend/.venv/Scripts/python scripts/seed.py --reset                            
 
 PowerShell users: set each variable first with `$env:DATABASE_URL = "<…>"` and so on, then run the two commands without the prefixes.
 
-This loads the 15 sample partner reports through the real upload pipeline, reconciles 30,000 orders and opens the claims. Over the internet to Neon it takes about a minute.
+This loads the 15 sample partner reports through the real upload pipeline, adds a few recent returns, reconciles about 30,000 orders, opens the claims and ranks the review queue (with Gemini when `GEMINI_API_KEY` is set in your shell; rules only otherwise). Over the internet to Neon it takes one to two minutes.
 
 ## 3. Backend: Render
 
@@ -163,9 +163,11 @@ Uploads then go straight to the backend, up to 50 MB. *Direct mode without a sha
 - [ ] The GitHub repository is **public** and opens without signing in
 - [ ] `/health` returns ok
 - [ ] Sign in as finance on a phone or in Safari: the session survives a page reload
-- [ ] The dashboard shows about ₹5.8 L at risk across 7 partners. The figure rises slightly over the first weeks as not-yet-due orders pass their due date.
+- [ ] The dashboard shows about ₹6.6 L at risk across 7 partners (it includes 82 orders paid by lines without an order ID, until they are reviewed). The figure rises slightly over the first weeks as not-yet-due orders pass their due date.
 - [ ] Orders → search `88120` → the drawer shows expected ₹899, received ₹862, −₹37
 - [ ] Uploads → Marketplace 1 · Settlement → upload `sample_data/format_changed/marketplace1_settlement_NEW_FORMAT.csv` → the mapping review shows "AI suggested these columns" → approve. If it says "AI unavailable", check `GEMINI_API_KEY` in Render.
+- [ ] Review queue → 82 lines; with `GEMINI_API_KEY` set, the cards say "AI + rules". Accept one: the order turns settled
+- [ ] Returns → all three states show (Not received, Waiting, Received). Waiting returns age out after 7 days; re-run the seed to refresh them
 - [ ] Claims → a claim → **PDF summary** downloads
 - [ ] Sign in as co-founder: no Uploads, no edit buttons; exports still work
 - [ ] Replace the two placeholder URLs at the top of this file with the live ones and commit
