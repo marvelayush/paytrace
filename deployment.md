@@ -11,7 +11,7 @@ Everything below is clicks and copy-paste. Nothing secret is stored in the repos
 
 ## For reviewers: open the backend first
 
-The backend runs on Render's free plan, which **sleeps after 15 minutes without traffic**. The first request then takes 30–60 seconds while it wakes up.
+The backend runs on Render's free plan, which **sleeps after 15 minutes without traffic**. The first request then takes **about 50 seconds** while it wakes up. Until then the app may say "PayTrace is not responding".
 
 1. Open **https://paytrace-api.onrender.com/health** and wait until it shows `{"status":"ok","database":"ok"}`.
 2. Then open the app at **https://paytrace-two.vercel.app** and sign in with a demo account below.
@@ -29,23 +29,61 @@ These are set when the database is seeded (step 2). They are demo credentials me
 
 ## Run it locally (step by step)
 
-Requirements: Docker, Python 3.11+, Node 20+.
+Requirements: Docker Desktop (with Compose), Python 3.11+ (developed on 3.13), Node.js 20+ with npm, Git.
 
-1. `cp .env.example .env` and fill in `JWT_SECRET` (32+ random characters), `DEMO_FINANCE_PASSWORD`, `DEMO_FOUNDER_PASSWORD`, and optionally `GEMINI_API_KEY`.
-2. Create `frontend/.env.local` with `NEXT_PUBLIC_API_URL=http://localhost:8000` and `NEXT_PUBLIC_DEMO_MODE=true`.
-3. `docker compose up -d` starts Postgres 16, plus the `paytrace_test` database for pytest.
-4. Backend:
-   ```bash
-   cd backend
-   python -m venv .venv
-   .venv/Scripts/activate            # macOS/Linux: source .venv/bin/activate
-   pip install -r requirements-dev.txt
-   alembic upgrade head
-   python ../scripts/seed.py --reset
-   uvicorn app.main:app --reload --port 8000
-   ```
-5. Frontend, in a second terminal: `cd frontend && npm install && npm run dev`, then open http://localhost:3000.
-6. Sign in with the demo emails below and the passwords you put in `.env`.
+**1. Clone and configure**
+
+macOS / Linux:
+
+```bash
+git clone https://github.com/marvelayush/paytrace.git
+cd paytrace
+cp .env.example .env
+printf "NEXT_PUBLIC_API_URL=http://localhost:8000\nNEXT_PUBLIC_DEMO_MODE=true\n" > frontend/.env.local
+```
+
+Windows (PowerShell):
+
+```powershell
+git clone https://github.com/marvelayush/paytrace.git
+cd paytrace
+Copy-Item .env.example .env
+"NEXT_PUBLIC_API_URL=http://localhost:8000", "NEXT_PUBLIC_DEMO_MODE=true" | Set-Content frontend\.env.local
+```
+
+Open `.env` and fill in at least `JWT_SECRET` (32+ random characters), `DEMO_FINANCE_PASSWORD` and `DEMO_FOUNDER_PASSWORD`. `GEMINI_API_KEY` is optional. `DATABASE_URL` can stay empty for the local docker-compose database.
+
+**2. Start the database:** `docker compose up -d` (Postgres 16 on port 5432, plus the `paytrace_test` database for pytest).
+
+**3. Backend**
+
+macOS / Linux:
+
+```bash
+cd backend
+python3 -m venv .venv
+.venv/bin/python -m pip install -r requirements-dev.txt
+.venv/bin/alembic upgrade head
+.venv/bin/python ../scripts/seed.py --reset
+.venv/bin/python -m uvicorn app.main:app --reload --port 8000
+```
+
+Windows (PowerShell):
+
+```powershell
+cd backend
+python -m venv .venv
+.venv\Scripts\python -m pip install -r requirements-dev.txt
+.venv\Scripts\alembic.exe upgrade head
+.venv\Scripts\python ..\scripts\seed.py --reset
+.venv\Scripts\python -m uvicorn app.main:app --reload --port 8000
+```
+
+`http://localhost:8000/health` should return `{"status":"ok","database":"ok"}`.
+
+**4. Frontend** (second terminal): `cd frontend`, then `npm install`, then `npm run dev`, and open http://localhost:3000.
+
+**5. Sign in** with the demo emails below and the passwords you put in `.env`.
 
 To try proxy mode locally, build from PowerShell (Git Bash rewrites `/api` into a Windows path):
 `$env:NEXT_PUBLIC_API_URL='/api'; $env:BACKEND_URL='http://localhost:8000'; npm run build; npx next start`.
