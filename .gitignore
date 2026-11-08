@@ -36,3 +36,6 @@ Thumbs.db
 .idea/
 .vscode/
 *.log
+
+# Submission package (built locally, not committed)
+submission/
