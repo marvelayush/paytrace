@@ -220,16 +220,14 @@ MAX_MISSING_ID_SHARE = 0.2
 
 def _missing_id_rows(frame: pl.DataFrame, file_kind: str, columns: dict[str, str | None]) -> pl.Series | None:
     """Rows whose identifying cells are all blank, when they may go to the review queue; otherwise None."""
-    id_fields = QUEUE_ID_FIELDS.get(file_kind)
-    order_column = columns.get("order_id")
-    if not id_fields or not order_column or order_column not in frame.columns or frame.height == 0:
+    id_fields = QUEUE_ID_FIELDS.get(file_kind, ())
+    headers = [columns[name] for name in id_fields if columns.get(name) and columns[name] in frame.columns]
+    if not headers or frame.height == 0:
         return None
     blank = pl.Series([True] * frame.height)
-    for name in id_fields:
-        header = columns.get(name)
-        if header and header in frame.columns:
-            raw = frame.get_column(header).str.strip_chars()
-            blank = blank & (raw.is_null() | (raw == ""))
+    for header in headers:
+        raw = frame.get_column(header).str.strip_chars()
+        blank = blank & (raw.is_null() | (raw == ""))
     if blank.sum() / frame.height > MAX_MISSING_ID_SHARE:
         return None
     return blank
